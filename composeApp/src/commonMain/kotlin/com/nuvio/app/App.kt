@@ -615,12 +615,57 @@ fun App(
         val licenseState by LicenseRepository.state.collectAsStateWithLifecycle()
 
         LaunchedEffect(Unit) {
-            LicenseRepository.initialize()
+            if (AppFeaturePolicy.isUserClient) {
+                LicenseRepository.initialize()
+            }
         }
 
-        LaunchedEffect(licenseState, profileState.profiles, gateScreen) {
+        LaunchedEffect(licenseState, authState, profileState.profiles, gateScreen) {
             if (gateScreen == AppGateScreen.AdminPanel.name) return@LaunchedEffect
 
+            if (AppFeaturePolicy.isAdminClient) {
+                // Admin client uses normal account system
+                val cachedProfiles = profileState.profiles
+                when (authState) {
+                    is AuthState.Loading -> {
+                        if (cachedProfiles.isNotEmpty()) {
+                            val active = profileState.activeProfile ?: cachedProfiles.first()
+                            if (profileState.activeProfile == null) {
+                                ProfileRepository.selectProfile(active.profileIndex)
+                            }
+                            if (gateScreen != AppGateScreen.Main.name) {
+                                gateScreen = AppGateScreen.Main.name
+                            }
+                        } else {
+                            gateScreen = AppGateScreen.Loading.name
+                        }
+                    }
+                    is AuthState.Unauthenticated -> {
+                        ProfileRepository.clearInMemory()
+                        gateScreen = AppGateScreen.Auth.name
+                    }
+                    is AuthState.Authenticated -> {
+                        val authenticatedState = authState as AuthState.Authenticated
+                        ProfileRepository.ensureLoaded(authenticatedState.userId)
+                        val profiles = ProfileRepository.state.value.profiles
+                        if (profiles.isNotEmpty()) {
+                            val active = profileState.activeProfile ?: profiles.first()
+                            if (profileState.activeProfile == null) {
+                                ProfileRepository.selectProfile(active.profileIndex)
+                                SyncManager.pullAllForProfile(active.profileIndex)
+                            }
+                            if (gateScreen != AppGateScreen.Main.name) {
+                                gateScreen = AppGateScreen.Main.name
+                            }
+                        } else {
+                            gateScreen = AppGateScreen.Main.name
+                        }
+                    }
+                }
+                return@LaunchedEffect
+            }
+
+            // User client uses license system
             when (val lic = licenseState) {
                 is LicenseState.Loading -> {
                     if (gateScreen != AppGateScreen.Loading.name) {
