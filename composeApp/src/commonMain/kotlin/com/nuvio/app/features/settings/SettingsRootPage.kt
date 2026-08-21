@@ -91,38 +91,52 @@ internal fun LazyListScope.settingsRootContent(
     showAdvancedSection: Boolean = true,
     showSupportersContributorsPage: Boolean = true,
 ) {
-    if (showAccountSection && AppFeaturePolicy.isAdminClient) {
+    if (showAccountSection) {
         item {
             SettingsSection(
-                title = stringResource(Res.string.compose_settings_root_account_section),
+                title = if (AppFeaturePolicy.isAdminClient) {
+                    stringResource(Res.string.compose_settings_root_account_section)
+                } else {
+                    "Subscription"
+                },
                 isTablet = isTablet,
             ) {
                 SettingsGroup(isTablet = isTablet) {
-                    if (onSwitchProfileClick != null) {
+                    if (AppFeaturePolicy.isAdminClient) {
+                        if (onSwitchProfileClick != null) {
+                            SettingsNavigationRow(
+                                title = stringResource(Res.string.compose_settings_root_switch_profile_title),
+                                description = stringResource(Res.string.compose_settings_root_switch_profile_description),
+                                icon = Icons.Rounded.People,
+                                isTablet = isTablet,
+                                onClick = onSwitchProfileClick,
+                            )
+                            SettingsGroupDivider(isTablet = isTablet)
+                        }
                         SettingsNavigationRow(
-                            title = stringResource(Res.string.compose_settings_root_switch_profile_title),
-                            description = stringResource(Res.string.compose_settings_root_switch_profile_description),
-                            icon = Icons.Rounded.People,
+                            title = stringResource(Res.string.compose_settings_page_account),
+                            description = stringResource(Res.string.compose_settings_root_account_description),
+                            icon = Icons.Rounded.AccountCircle,
                             isTablet = isTablet,
-                            onClick = onSwitchProfileClick,
+                            onClick = onAccountClick,
                         )
                         SettingsGroupDivider(isTablet = isTablet)
+                        SettingsNavigationRow(
+                            title = stringResource(Res.string.compose_settings_page_tracking),
+                            description = stringResource(Res.string.compose_settings_root_tracking_description),
+                            icon = Icons.Default.Sync,
+                            isTablet = isTablet,
+                            onClick = onTrackingClick,
+                        )
+                    } else {
+                        SettingsNavigationRow(
+                            title = "Subscription & License",
+                            description = "Active plan, expiry date, and license status",
+                            icon = Icons.Rounded.AccountCircle,
+                            isTablet = isTablet,
+                            onClick = onAccountClick,
+                        )
                     }
-                    SettingsNavigationRow(
-                        title = stringResource(Res.string.compose_settings_page_account),
-                        description = stringResource(Res.string.compose_settings_root_account_description),
-                        icon = Icons.Rounded.AccountCircle,
-                        isTablet = isTablet,
-                        onClick = onAccountClick,
-                    )
-                    SettingsGroupDivider(isTablet = isTablet)
-                    SettingsNavigationRow(
-                        title = stringResource(Res.string.compose_settings_page_tracking),
-                        description = stringResource(Res.string.compose_settings_root_tracking_description),
-                        icon = Icons.Default.Sync,
-                        isTablet = isTablet,
-                        onClick = onTrackingClick,
-                    )
                 }
             }
         }

@@ -658,7 +658,17 @@ fun App(
                                 gateScreen = AppGateScreen.Main.name
                             }
                         } else {
-                            gateScreen = AppGateScreen.Main.name
+                            ProfileRepository.pullProfiles()
+                            val pulled = ProfileRepository.state.value.profiles
+                            if (pulled.isNotEmpty()) {
+                                ProfileRepository.selectProfile(pulled.first().profileIndex)
+                                SyncManager.pullAllForProfile(pulled.first().profileIndex)
+                                gateScreen = AppGateScreen.Main.name
+                            } else {
+                                editingProfile = null
+                                isNewProfile = true
+                                gateScreen = AppGateScreen.ProfileEdit.name
+                            }
                         }
                     }
                 }
