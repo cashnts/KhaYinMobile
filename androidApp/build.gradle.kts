@@ -63,12 +63,19 @@ android {
         }
     }
 
+    val clientRoleValue = (findProperty("nuvio.client.role") as? String)
+        ?: System.getenv("NUVIO_CLIENT_ROLE")
+        ?: "user"
+    val isAdminClient = clientRoleValue.equals("admin", ignoreCase = true)
+    val mobileAppName = if (isAdminClient) "KhaYin Admin" else "KhaYin"
+
     defaultConfig {
         applicationId = "com.nuvio.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = releaseAppVersionCode
         versionName = releaseAppVersionName
+        manifestPlaceholders["appName"] = mobileAppName
     }
 
     flavorDimensions += "distribution"
