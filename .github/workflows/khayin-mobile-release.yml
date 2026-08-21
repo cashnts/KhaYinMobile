@@ -148,28 +148,41 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          VERSION="${{ needs.metadata.outputs.version }}"
+          MISSING=0
+          if [ -z "${R2_ACCOUNT_ID}" ]; then echo "::warning ::Secret R2_ACCOUNT_ID is empty or not found in repository secrets."; MISSING=1; fi
+          if [ -z "${AWS_ACCESS_KEY_ID}" ]; then echo "::warning ::Secret R2_ACCESS_KEY_ID is empty or not found in repository secrets."; MISSING=1; fi
+          if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then echo "::warning ::Secret R2_SECRET_ACCESS_KEY is empty or not found in repository secrets."; MISSING=1; fi
+          if [ -z "${R2_BUCKET_NAME}" ]; then echo "::warning ::Secret R2_BUCKET_NAME is empty or not found in repository secrets."; MISSING=1; fi
           
-          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET_NAME" ]; then
-            echo "::warning ::Cloudflare R2 secrets (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) are not fully configured. Skipping R2 upload."
-            exit 0
+          if [ "$MISSING" -eq 1 ]; then
+            echo "Error: Cloudflare R2 secrets are missing. Skipping R2 upload."
+            exit 1
           fi
 
           ENDPOINT_URL="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          TARGET_DIR="s3://${R2_BUCKET_NAME}/v${VERSION}"
+          TARGET_DIR="v${VERSION}"
           
-          echo "Uploading release artifacts to Cloudflare R2: ${TARGET_DIR}/"
+          echo "Uploading release artifacts to Cloudflare R2: s3://${R2_BUCKET_NAME}/${TARGET_DIR}/"
           
-          aws s3 sync release-files/ "${TARGET_DIR}/" \
-            --endpoint-url "${ENDPOINT_URL}" \
-            --no-progress
+          for file in release-files/*; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              echo "Uploading $filename -> s3://${R2_BUCKET_NAME}/${TARGET_DIR}/${filename}"
+              aws s3 cp "$file" "s3://${R2_BUCKET_NAME}/${TARGET_DIR}/${filename}" \
+                --endpoint-url "${ENDPOINT_URL}" \
+                --region auto
+            fi
+          done
 
           echo "Upload complete! Contents in bucket folder v${VERSION}:"
-          aws s3 ls "${TARGET_DIR}/" --endpoint-url "${ENDPOINT_URL}" || true
+          aws s3 ls "s3://${R2_BUCKET_NAME}/${TARGET_DIR}/" --endpoint-url "${ENDPOINT_URL}" --region auto || true
 
       # Publish or update GitHub Release
       - name: Publish GitHub Release
