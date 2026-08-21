@@ -173,7 +173,27 @@ object ThemeColors {
         backgroundCard = Color(0xFF222222),
     )
 
+    val DarkIndigo = ThemeColorPalette(
+        secondary = Color(0xFF6366F1),
+        secondaryVariant = Color(0xFF818CF8),
+        accentGradient = listOf(
+            Color(0xFF818CF8),
+            Color(0xFF6366F1),
+            Color(0xFF4F46E5),
+            Color(0xFF4338CA),
+        ),
+        nativeAccentHex = "#6366F1",
+        onSecondary = Color.White,
+        onSecondaryVariant = Color.White,
+        focusRing = Color(0xFF818CF8),
+        focusBackground = Color(0xFF1E1B4B),
+        background = Color(0xFF0B0C16),
+        backgroundElevated = Color(0xFF121424),
+        backgroundCard = Color(0xFF181B30),
+    )
+
     fun getColorPalette(theme: AppTheme): ThemeColorPalette = when (theme) {
+        AppTheme.DARK_INDIGO -> DarkIndigo
         AppTheme.GOLD -> Gold
         AppTheme.JADE -> Jade
         AppTheme.ROSE_GOLD -> RoseGold

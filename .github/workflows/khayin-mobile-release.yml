@@ -1,0 +1,186 @@
+name: KhaYin Mobile Android Release & Cloudflare R2 Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Optional version tag override (e.g. 1.0.0 or 1). Leave empty to use Version.xcconfig'
+        required: false
+        type: string
+        default: ''
+      upload_to_r2:
+        description: 'Upload release artifacts to Cloudflare R2'
+        required: true
+        type: boolean
+        default: true
+      create_github_release:
+        description: 'Publish or update GitHub Release'
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: khayin-mobile-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Resolve Version Metadata
+  # ---------------------------------------------------------------------------
+  metadata:
+    name: Resolve Version Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version_step.outputs.version }}
+      clean_version: ${{ steps.version_step.outputs.clean_version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Determine Version
+        id: version_step
+        run: |
+          if [ -n "${{ inputs.version_override }}" ]; then
+            RAW_VERSION="${{ inputs.version_override }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RAW_VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -f "iosApp/Configuration/Version.xcconfig" ]; then
+            RAW_VERSION=$(grep "^MARKETING_VERSION" iosApp/Configuration/Version.xcconfig | cut -d'=' -f2 | tr -d ' \r\n')
+          else
+            RAW_VERSION="1.0.0"
+          fi
+          
+          CLEAN_VERSION=$(echo "${RAW_VERSION}" | tr -cd '[:alnum:]._-')
+          echo "version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "clean_version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${CLEAN_VERSION}"
+
+  # ---------------------------------------------------------------------------
+  # 2. Build Android (Release APK)
+  # ---------------------------------------------------------------------------
+  build-android:
+    name: Build Android APK
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Android Release APK
+        run: |
+          ./gradlew :androidApp:assembleFullRelease -Pnuvio.android.distribution=full --stacktrace
+
+      - name: Rename and Prepare Android Artifacts
+        run: |
+          VERSION="${{ needs.metadata.outputs.version }}"
+          mkdir -p dist
+          
+          # Find universal APK first, or standard release APK
+          UNIVERSAL_APK=$(find androidApp/build/outputs/apk/full/release -type f -name "*universal*.apk" | head -n 1)
+          MAIN_APK=$(find androidApp/build/outputs/apk/full/release -type f -name "*.apk" | head -n 1)
+          
+          if [ -n "$UNIVERSAL_APK" ] && [ -f "$UNIVERSAL_APK" ]; then
+            cp "$UNIVERSAL_APK" "dist/khayin-android-v${VERSION}.apk"
+            echo "Selected universal APK as dist/khayin-android-v${VERSION}.apk"
+          elif [ -n "$MAIN_APK" ] && [ -f "$MAIN_APK" ]; then
+            cp "$MAIN_APK" "dist/khayin-android-v${VERSION}.apk"
+            echo "Selected release APK as dist/khayin-android-v${VERSION}.apk"
+          else
+            echo "Error: No Android APK found in build outputs!" >&2
+            find androidApp/build/outputs -type f || true
+            exit 1
+          fi
+          
+          ls -la dist/
+
+      - name: Upload Android Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: dist/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3. Collect, Upload to Cloudflare R2 & Publish Release
+  # ---------------------------------------------------------------------------
+  publish-release:
+    name: Upload to Cloudflare R2 & Publish Release
+    needs: [metadata, build-android]
+    runs-on: ubuntu-latest
+    if: always() && (needs.build-android.result == 'success')
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          merge-multiple: true
+
+      - name: List Collected Release Files
+        run: |
+          mkdir -p release-files
+          cp -r all-artifacts/* release-files/ 2>/dev/null || true
+          echo "=== Collected Release Artifacts ==="
+          ls -la release-files/
+
+      # Upload to Cloudflare R2 using AWS CLI with custom S3 endpoint
+      - name: Upload to Cloudflare R2 Bucket
+        if: ${{ (inputs.upload_to_r2 != false) }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          VERSION="${{ needs.metadata.outputs.version }}"
+          
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET_NAME" ]; then
+            echo "::warning ::Cloudflare R2 secrets (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) are not fully configured. Skipping R2 upload."
+            exit 0
+          fi
+
+          ENDPOINT_URL="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          TARGET_DIR="s3://${R2_BUCKET_NAME}/v${VERSION}"
+          
+          echo "Uploading release artifacts to Cloudflare R2: ${TARGET_DIR}/"
+          
+          aws s3 sync release-files/ "${TARGET_DIR}/" \
+            --endpoint-url "${ENDPOINT_URL}" \
+            --no-progress
+
+          echo "Upload complete! Contents in bucket folder v${VERSION}:"
+          aws s3 ls "${TARGET_DIR}/" --endpoint-url "${ENDPOINT_URL}" || true
+
+      # Publish or update GitHub Release
+      - name: Publish GitHub Release
+        if: ${{ (inputs.create_github_release != false) }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ needs.metadata.outputs.version }}"
+          name: "KhaYin Mobile v${{ needs.metadata.outputs.version }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

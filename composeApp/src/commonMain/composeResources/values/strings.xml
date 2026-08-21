@@ -4,6 +4,7 @@
     <string name="theme_rose_gold">Rose Gold</string>
     <string name="theme_arctic_blue">Arctic Blue</string>
     <string name="theme_graphite">Graphite</string>
+    <string name="theme_dark_indigo">Dark Indigo</string>
     <string name="profile_choose_background">Choose Profile Background</string>
     <string name="profile_background_member_note">Custom background URLs can be configured from the Nuvio web panel.</string>
     <string name="profile_background_normal">Normal</string>
