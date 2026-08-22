@@ -1,5 +1,6 @@
 package com.nuvio.app.features.profiles
 
+import com.nuvio.app.core.build.AppFeaturePolicy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -82,13 +83,19 @@ fun ProfileEditScreen(
     }
     val fallbackColorHex = currentProfile?.avatarColorHex ?: PROFILE_COLORS.first()
 
-    var name by rememberSaveable { mutableStateOf(currentProfile?.name ?: "") }
+    val defaultInitialName = if (isNew && AppFeaturePolicy.isUserClient) {
+        (com.nuvio.app.features.license.LicenseRepository.state.value as? com.nuvio.app.features.license.LicenseState.Active)?.info?.customerName?.takeIf { it.isNotBlank() } ?: ""
+    } else {
+        currentProfile?.name ?: ""
+    }
+
+    var name by rememberSaveable { mutableStateOf(defaultInitialName) }
     var selectedAvatarId by rememberSaveable { mutableStateOf(currentProfile?.avatarId) }
     var avatarUrl by rememberSaveable { mutableStateOf(currentProfile?.avatarUrl.orEmpty()) }
     var selectedBackgroundId by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundId) }
     var selectedBackgroundUrl by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundUrl) }
     var usesPrimaryAddons by rememberSaveable {
-        mutableStateOf(if (com.nuvio.app.core.build.AppFeaturePolicy.isUserClient) true else (currentProfile?.usesPrimaryAddons ?: false))
+        mutableStateOf(if (AppFeaturePolicy.isUserClient) true else (currentProfile?.usesPrimaryAddons ?: false))
     }
     var isSaving by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
