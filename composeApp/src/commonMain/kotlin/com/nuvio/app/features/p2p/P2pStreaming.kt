@@ -44,7 +44,7 @@ object P2pSettingsRepository {
     val uiState: StateFlow<P2pSettingsUiState> = _uiState.asStateFlow()
 
     val isVisible: Boolean
-        get() = AppFeaturePolicy.p2pEnabled
+        get() = AppFeaturePolicy.p2pEnabled && AppFeaturePolicy.isAdminClient
 
     private var hasLoaded = false
     private var p2pEnabled = false

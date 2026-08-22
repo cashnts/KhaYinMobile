@@ -295,18 +295,20 @@ internal fun LazyListScope.appearanceSettingsContent(
             }
         }
     }
-    item {
-        SettingsSection(
-            title = stringResource(Res.string.settings_appearance_section_streams),
-            isTablet = isTablet,
-        ) {
-            SettingsGroup(isTablet = isTablet) {
-                SettingsNavigationRow(
-                    title = stringResource(Res.string.compose_settings_page_streams),
-                    description = stringResource(Res.string.compose_settings_root_streams_description),
-                    isTablet = isTablet,
-                    onClick = onStreamsClick,
-                )
+    if (com.nuvio.app.core.build.AppFeaturePolicy.isAdminClient) {
+        item {
+            SettingsSection(
+                title = stringResource(Res.string.settings_appearance_section_streams),
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.compose_settings_page_streams),
+                        description = stringResource(Res.string.compose_settings_root_streams_description),
+                        isTablet = isTablet,
+                        onClick = onStreamsClick,
+                    )
+                }
             }
         }
     }

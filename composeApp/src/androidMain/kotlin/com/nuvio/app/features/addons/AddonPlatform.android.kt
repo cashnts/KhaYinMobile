@@ -205,6 +205,9 @@ private suspend fun executeTextRequest(
     val normalizedMethod = method.uppercase()
     val sanitizedHeaders = headers.withoutAcceptEncoding()
     val builder = Request.Builder().url(url)
+    if (sanitizedHeaders.getHeaderIgnoreCase("User-Agent") == null) {
+        builder.header("User-Agent", "KhaYin")
+    }
     sanitizedHeaders.forEach { (key, value) ->
         builder.header(key, value)
     }
@@ -286,6 +289,9 @@ actual suspend fun httpRequestRaw(
         val normalizedMethod = method.uppercase()
         val sanitizedHeaders = headers.withoutAcceptEncoding()
         val builder = Request.Builder().url(url)
+        if (sanitizedHeaders.getHeaderIgnoreCase("User-Agent") == null) {
+            builder.header("User-Agent", "KhaYin")
+        }
         sanitizedHeaders.forEach { (key, value) ->
             builder.header(key, value)
         }

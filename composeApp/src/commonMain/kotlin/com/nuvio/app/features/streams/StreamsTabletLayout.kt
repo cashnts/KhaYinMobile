@@ -193,13 +193,6 @@ internal fun TabletStreamsLayout(
                             )
                         }
 
-                        ProviderFilterRow(
-                            groups = uiState.groups,
-                            selectedFilter = uiState.selectedFilter,
-                            onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
-                            onRefresh = onRefresh,
-                        )
-
                         ActiveScrapersStatusBlock(
                             groups = uiState.groups,
                             modifier = Modifier.padding(bottom = 4.dp),
