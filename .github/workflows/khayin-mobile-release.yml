@@ -19,6 +19,8 @@ on:
         type: boolean
         default: true
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -78,17 +80,44 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Configure Keystore from Secrets
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 || secrets.RELEASE_PROPERTIES_BASE64 }}
+        run: |
+          if [ -n "${RELEASE_KEYSTORE_BASE64}" ]; then
+            keystore_path="${RUNNER_TEMP}/nuvio-release.jks"
+            printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+            echo "NUVIO_RELEASE_STORE_FILE=${keystore_path}" >> "$GITHUB_ENV"
+            echo "Loaded release keystore from secrets."
+          fi
+          if [ -n "${RELEASE_PROPERTIES_BASE64}" ]; then
+            printf '%s' "${RELEASE_PROPERTIES_BASE64}" | base64 --decode > local.properties
+            echo "Loaded local.properties from secrets."
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Android Release APK
+        env:
+          NUVIO_RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+          NUVIO_RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          NUVIO_RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
         run: |
-          ./gradlew :androidApp:assembleFullRelease -Pnuvio.client.role=user -Pnuvio.android.distribution=full -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m" --no-daemon --stacktrace
+          ./gradlew :androidApp:assembleFullRelease \
+            -Pnuvio.client.role=user \
+            -Pnuvio.android.distribution=full \
+            --parallel \
+            --build-cache \
+            --stacktrace
 
       - name: Rename and Prepare Android Artifacts
         run: |
@@ -96,15 +125,19 @@ jobs:
           mkdir -p dist
           
           # Find universal APK first, or standard release APK
-          UNIVERSAL_APK=$(find androidApp/build/outputs/apk/full/release -type f -name "*universal*.apk" | head -n 1)
-          MAIN_APK=$(find androidApp/build/outputs/apk/full/release -type f -name "*.apk" | head -n 1)
+          UNIVERSAL_APK=$(find androidApp/build/outputs/apk/full/release -type f -name "*universal*.apk" 2>/dev/null | head -n 1)
+          MAIN_APK=$(find androidApp/build/outputs/apk/full/release -type f -name "*.apk" 2>/dev/null | head -n 1)
+          FALLBACK_APK=$(find androidApp/build/outputs/apk -type f -name "*.apk" 2>/dev/null | head -n 1)
           
           if [ -n "$UNIVERSAL_APK" ] && [ -f "$UNIVERSAL_APK" ]; then
             cp "$UNIVERSAL_APK" "dist/khayin-android-v${VERSION}.apk"
-            echo "Selected universal APK as dist/khayin-android-v${VERSION}.apk"
+            echo "Selected universal APK: $UNIVERSAL_APK -> dist/khayin-android-v${VERSION}.apk"
           elif [ -n "$MAIN_APK" ] && [ -f "$MAIN_APK" ]; then
             cp "$MAIN_APK" "dist/khayin-android-v${VERSION}.apk"
-            echo "Selected release APK as dist/khayin-android-v${VERSION}.apk"
+            echo "Selected release APK: $MAIN_APK -> dist/khayin-android-v${VERSION}.apk"
+          elif [ -n "$FALLBACK_APK" ] && [ -f "$FALLBACK_APK" ]; then
+            cp "$FALLBACK_APK" "dist/khayin-android-v${VERSION}.apk"
+            echo "Selected fallback APK: $FALLBACK_APK -> dist/khayin-android-v${VERSION}.apk"
           else
             echo "Error: No Android APK found in build outputs!" >&2
             find androidApp/build/outputs -type f || true
