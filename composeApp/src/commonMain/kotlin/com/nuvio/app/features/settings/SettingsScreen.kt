@@ -98,6 +98,8 @@ private const val SettingsSearchRevealHapticDelayMillis = 90L
 
 private fun SettingsPage.isEnabledByPolicy(): Boolean =
     when (this) {
+        SettingsPage.ContentDiscovery,
+        SettingsPage.Addons -> AppFeaturePolicy.isAdminClient
         SettingsPage.SupportersContributors -> AppFeaturePolicy.supportersContributorsPageEnabled
         else -> true
     }

@@ -298,7 +298,7 @@ fun ProfileSwitcherTab(
                                 )
                             }
 
-                            if (profiles.size < MAX_PROFILES) {
+                            if (com.nuvio.app.core.build.AppFeaturePolicy.isAdminClient && profiles.size < MAX_PROFILES) {
                                 PopupAddProfileBubble(
                                     delayMs = profiles.size * 50,
                                     onClick = {
@@ -477,7 +477,7 @@ fun NativeProfileSwitcherPopup(
                                     )
                                 }
 
-                                if (profiles.size < MAX_PROFILES) {
+                                if (com.nuvio.app.core.build.AppFeaturePolicy.isAdminClient && profiles.size < MAX_PROFILES) {
                                     PopupAddProfileBubble(
                                         delayMs = profiles.size * 50,
                                         onClick = {
