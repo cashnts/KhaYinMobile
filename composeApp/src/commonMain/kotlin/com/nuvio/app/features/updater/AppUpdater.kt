@@ -171,8 +171,21 @@ class AppUpdaterController internal constructor(
 
     private var autoCheckStarted = false
 
+    private fun isDevelopmentBuild(): Boolean {
+        val version = AppVersionConfig.VERSION_NAME.lowercase()
+        return version.contains("alpha") ||
+            version.contains("beta") ||
+            version.contains("dev") ||
+            version.contains("snapshot") ||
+            version.contains("rc") ||
+            AppUpdaterPlatform.isDebugBuild
+    }
+
     fun ensureAutoCheckStarted() {
-        if (autoCheckStarted || !AppFeaturePolicy.inAppUpdaterEnabled || !AppUpdaterPlatform.isSupported) {
+        if (autoCheckStarted || AppFeaturePolicy.isAdminClient || !AppFeaturePolicy.inAppUpdaterEnabled || !AppUpdaterPlatform.isSupported) {
+            return
+        }
+        if (isDevelopmentBuild()) {
             return
         }
         autoCheckStarted = true
@@ -180,12 +193,16 @@ class AppUpdaterController internal constructor(
     }
 
     fun checkForUpdates(force: Boolean, showNoUpdateFeedback: Boolean) {
-        if (!AppFeaturePolicy.inAppUpdaterEnabled || !AppUpdaterPlatform.isSupported) {
+        if (AppFeaturePolicy.isAdminClient || !AppFeaturePolicy.inAppUpdaterEnabled || !AppUpdaterPlatform.isSupported) {
             if (showNoUpdateFeedback) {
                 scope.launch {
                     NuvioToastController.show(getString(Res.string.updates_not_available))
                 }
             }
+            return
+        }
+
+        if (!force && isDevelopmentBuild()) {
             return
         }
 
