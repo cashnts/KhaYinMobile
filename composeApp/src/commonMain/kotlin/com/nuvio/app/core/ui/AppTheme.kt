@@ -1,6 +1,7 @@
 package com.nuvio.app.core.ui
 
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.theme_khayin
 import nuvio.composeapp.generated.resources.theme_amber
 import nuvio.composeapp.generated.resources.theme_crimson
 import nuvio.composeapp.generated.resources.theme_emerald
@@ -17,6 +18,7 @@ import nuvio.composeapp.generated.resources.theme_dark_indigo
 import org.jetbrains.compose.resources.StringResource
 
 enum class AppTheme {
+    KHAYIN,
     GOLD,
     JADE,
     ROSE_GOLD,
@@ -34,6 +36,7 @@ enum class AppTheme {
 
 val AppTheme.labelRes: StringResource
     get() = when (this) {
+        AppTheme.KHAYIN -> Res.string.theme_khayin
         AppTheme.GOLD -> Res.string.theme_gold
         AppTheme.JADE -> Res.string.theme_jade
         AppTheme.ROSE_GOLD -> Res.string.theme_rose_gold
