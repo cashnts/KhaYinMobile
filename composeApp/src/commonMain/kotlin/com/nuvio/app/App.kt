@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -2271,7 +2272,8 @@ private fun MainAppContent(
                                     exit = fadeOut() + shrinkVertically(),
                                     modifier = Modifier
                                         .align(Alignment.TopCenter)
-                                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                                        .statusBarsPadding()
+                                        .padding(top = 10.dp, start = 16.dp, end = 16.dp)
                                         .zIndex(NuvioTokens.Z.toast),
                                 ) {
                                     Surface(

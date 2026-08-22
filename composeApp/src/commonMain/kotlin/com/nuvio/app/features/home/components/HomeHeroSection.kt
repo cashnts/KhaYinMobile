@@ -72,9 +72,9 @@ private const val HERO_SCROLL_MAX_SCALE = 1.3f
 private const val HERO_SWIPE_THRESHOLD_FRACTION = 0.16f
 private const val HERO_SWIPE_VELOCITY_THRESHOLD = 300f
 private const val HERO_AUTO_SCROLL_INTERVAL_MS = 8_000L
-private const val MOBILE_HERO_VIEWPORT_RATIO = 0.82f
-private const val MOBILE_HERO_MIN_HEIGHT_DP = 360f
-private const val MOBILE_HERO_MAX_HEIGHT_DP = 760f
+private const val MOBILE_HERO_VIEWPORT_RATIO = 0.52f
+private const val MOBILE_HERO_MIN_HEIGHT_DP = 320f
+private const val MOBILE_HERO_MAX_HEIGHT_DP = 460f
 
 internal data class HomeHeroLayout(
     val isTablet: Boolean,
@@ -276,7 +276,7 @@ fun HomeHeroSection(
                     }
 
                     if (!layout.isTablet) {
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Surface(
                             modifier = Modifier
                                 .clickable(enabled = onItemClick != null) {
@@ -288,7 +288,7 @@ fun HomeHeroSection(
                         ) {
                             Text(
                                 text = stringResource(Res.string.home_view_details),
-                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
+                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -501,8 +501,8 @@ internal fun homeHeroLayout(
             contentMaxWidth = 480.dp,
             contentWidthFraction = 1f,
             contentHorizontalPadding = 24.dp,
-            contentVerticalPadding = 16.dp,
-            bottomFadeHeight = 220.dp,
+            contentVerticalPadding = 14.dp,
+            bottomFadeHeight = 150.dp,
             logoWidthFraction = 0.62f,
         )
     }
@@ -513,7 +513,7 @@ private fun mobileHeroHeight(
     mobileBelowSectionHeightHintDp: Float?,
 ): Dp {
     val viewportDrivenHeight = viewportHeightDp?.let { (it * MOBILE_HERO_VIEWPORT_RATIO).dp }
-    val widthFallbackHeight = (maxWidthDp * 1.16f).dp
+    val widthFallbackHeight = (maxWidthDp * 1.05f).dp
     val baseHeight = viewportDrivenHeight ?: widthFallbackHeight
 
     val maxAllowedFromViewportDp = if (viewportHeightDp != null && mobileBelowSectionHeightHintDp != null) {
