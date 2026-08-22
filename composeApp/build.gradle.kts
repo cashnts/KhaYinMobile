@@ -152,6 +152,17 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
 
         outDir.resolve("com/nuvio/app/core/build").apply {
             mkdirs()
+            resolve("ClientRoleConfig.kt").writeText(
+                """
+                |package com.nuvio.app.core.build
+                |
+                |object ClientRoleConfig {
+                |    const val ROLE = "${clientRole.get()}"
+                |    const val IS_ADMIN = ${clientRole.get().equals("admin", ignoreCase = true)}
+                |    const val IS_USER = ${!clientRole.get().equals("admin", ignoreCase = true)}
+                |}
+                """.trimMargin()
+            )
             resolve("AppVersionConfig.kt").writeText(
                 """
                 |package com.nuvio.app.core.build
