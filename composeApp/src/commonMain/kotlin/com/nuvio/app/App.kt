@@ -675,20 +675,15 @@ fun App(
                                 ProfileRepository.selectProfile(active.profileIndex)
                                 SyncManager.pullAllForProfile(active.profileIndex)
                             }
-                            if (gateScreen != AppGateScreen.Main.name && gateScreen != AppGateScreen.ProfileEdit.name) {
+                            if (gateScreen != AppGateScreen.Main.name && gateScreen != AppGateScreen.ProfileEdit.name && gateScreen != AppGateScreen.ProfileSelection.name) {
                                 gateScreen = AppGateScreen.Main.name
                             }
                         } else {
-                            // Seed default Admin profile so admin has a clean workspace
-                            scope.launch {
-                                ProfileRepository.createProfile(
-                                    name = "Admin",
-                                    avatarColorHex = "#00E699",
-                                    usesPrimaryAddons = true,
-                                )
-                            }
-                            if (gateScreen != AppGateScreen.Main.name) {
-                                gateScreen = AppGateScreen.Main.name
+                            // If no profiles exist yet, open profile editor so user sets their desired profile name
+                            editingProfile = null
+                            isNewProfile = true
+                            if (gateScreen != AppGateScreen.ProfileEdit.name && gateScreen != AppGateScreen.ProfileSelection.name) {
+                                gateScreen = AppGateScreen.ProfileEdit.name
                             }
                         }
                     }
