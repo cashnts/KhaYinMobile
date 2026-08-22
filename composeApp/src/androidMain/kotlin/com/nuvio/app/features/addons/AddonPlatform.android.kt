@@ -29,38 +29,52 @@ actual object AddonStorage {
     private const val addonUrlsKey = "installed_manifest_urls"
     private const val addonEnabledStatesKey = "installed_manifest_enabled_states"
 
+    private const val DEFAULT_CINEMETA_URL = "https://v3-cinemeta.strem.io/manifest.json"
+    private const val DEFAULT_KHAYIN_URL = "https://stream.khayin.net/manifest.json"
+    private val DEFAULT_ADDONS = listOf(DEFAULT_CINEMETA_URL, DEFAULT_KHAYIN_URL)
+
     private var preferences: SharedPreferences? = null
 
     fun initialize(context: Context) {
         preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     }
 
-    actual fun loadInstalledAddonUrls(profileId: Int): List<String> =
-        preferences
+    actual fun loadInstalledAddonUrls(profileId: Int): List<String> {
+        val stored = preferences
             ?.getString("${addonUrlsKey}_$profileId", null)
             .orEmpty()
             .lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .toList()
+        return (DEFAULT_ADDONS + stored).distinct()
+    }
 
     actual fun saveInstalledAddonUrls(profileId: Int, urls: List<String>) {
         preferences
             ?.edit()
-            ?.putString("${addonUrlsKey}_$profileId", urls.joinToString(separator = "\n"))
+            ?.putString("${addonUrlsKey}_$profileId", (DEFAULT_ADDONS + urls).distinct().joinToString(separator = "\n"))
             ?.apply()
     }
 
-    actual fun loadAddonEnabledStates(profileId: Int): Map<String, Boolean> =
-        preferences
+    actual fun loadAddonEnabledStates(profileId: Int): Map<String, Boolean> {
+        val loaded = preferences
             ?.getString("${addonEnabledStatesKey}_$profileId", null)
             .orEmpty()
             .lineSequence()
             .mapNotNull(::parseEnabledStateLine)
             .toMap()
+            .toMutableMap()
+        loaded.put(DEFAULT_CINEMETA_URL, true)
+        loaded.putIfAbsent(DEFAULT_KHAYIN_URL, true)
+        return loaded
+    }
 
     actual fun saveAddonEnabledStates(profileId: Int, states: Map<String, Boolean>) {
-        val payload = states.entries.joinToString(separator = "\n") { (url, enabled) ->
+        val updated = states.toMutableMap().apply {
+            put(DEFAULT_CINEMETA_URL, true)
+        }
+        val payload = updated.entries.joinToString(separator = "\n") { (url, enabled) ->
             "$url\t$enabled"
         }
         preferences

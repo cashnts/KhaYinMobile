@@ -698,6 +698,7 @@ private fun MobileSettingsScreen(
                             onAccountClick = onAccountClick,
                             onSwitchProfileClick = onSwitchProfile,
                             showSupportersContributorsPage = AppFeaturePolicy.supportersContributorsPageEnabled,
+                            showIntegrationsEntry = AppFeaturePolicy.isAdminClient,
                         )
                     }
                 }
@@ -1131,6 +1132,7 @@ private fun TabletSettingsScreen(
                                 showAboutSection = activeCategory == SettingsCategory.About,
                                 showAdvancedSection = activeCategory == SettingsCategory.Advanced,
                                 showSupportersContributorsPage = AppFeaturePolicy.supportersContributorsPageEnabled,
+                                showIntegrationsEntry = AppFeaturePolicy.isAdminClient,
                             )
                         }
                     }
