@@ -22,10 +22,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -36,13 +39,17 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.Close
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.font.FontWeight
 
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -88,6 +95,8 @@ import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.DeviceSessionRegistration
 import com.nuvio.app.core.deeplink.AppDeepLink
+import com.nuvio.app.features.license.AdminControlRepository
+import com.nuvio.app.features.license.MaintenanceModeScreen
 import com.nuvio.app.core.deeplink.AppDeepLinkRepository
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
@@ -420,6 +429,7 @@ private fun PlayerLaunch.toExternalPlayerPlaybackRequest(): ExternalPlayerPlayba
 
 private enum class AppGateScreen {
     Loading,
+    Maintenance,
     LicenseActivation,
     LicenseExpired,
     AdminPanel,
@@ -548,6 +558,8 @@ fun App(
         var editingProfile by remember { mutableStateOf<NuvioProfile?>(null) }
         var isNewProfile by remember { mutableStateOf(false) }
         var autoSkipProfileSelection by rememberSaveable { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        val licenseState by LicenseRepository.state.collectAsStateWithLifecycle()
 
         LaunchedEffect(gateScreen, onAppReady) {
             if (gateScreen != AppGateScreen.Main.name) {
@@ -612,16 +624,25 @@ fun App(
             }
         }
 
-        val licenseState by LicenseRepository.state.collectAsStateWithLifecycle()
+        val adminConfig by AdminControlRepository.config.collectAsStateWithLifecycle()
+        val dismissedTimestamp by AdminControlRepository.dismissedBroadcastTimestamp.collectAsStateWithLifecycle()
 
         LaunchedEffect(Unit) {
+            AdminControlRepository.startPolling()
             if (AppFeaturePolicy.isUserClient) {
                 LicenseRepository.initialize()
             }
         }
 
-        LaunchedEffect(licenseState, authState, profileState.profiles, gateScreen) {
+        LaunchedEffect(licenseState, authState, profileState.profiles, adminConfig.maintenanceMode, gateScreen) {
             if (gateScreen == AppGateScreen.AdminPanel.name) return@LaunchedEffect
+
+            if (AppFeaturePolicy.isUserClient && adminConfig.maintenanceMode) {
+                if (gateScreen != AppGateScreen.Maintenance.name) {
+                    gateScreen = AppGateScreen.Maintenance.name
+                }
+                return@LaunchedEffect
+            }
 
             if (AppFeaturePolicy.isAdminClient) {
                 // Admin client uses normal account system
@@ -647,27 +668,31 @@ fun App(
                     is AuthState.Authenticated -> {
                         val authenticatedState = authState as AuthState.Authenticated
                         ProfileRepository.ensureLoaded(authenticatedState.userId)
-                        val profiles = ProfileRepository.state.value.profiles
+                        var profiles = ProfileRepository.state.value.profiles
+                        if (profiles.isEmpty()) {
+                            ProfileRepository.loadCachedProfiles()
+                            profiles = ProfileRepository.state.value.profiles
+                        }
                         if (profiles.isNotEmpty()) {
                             val active = profileState.activeProfile ?: profiles.first()
                             if (profileState.activeProfile == null) {
                                 ProfileRepository.selectProfile(active.profileIndex)
                                 SyncManager.pullAllForProfile(active.profileIndex)
                             }
-                            if (gateScreen != AppGateScreen.Main.name) {
+                            if (gateScreen != AppGateScreen.Main.name && gateScreen != AppGateScreen.ProfileEdit.name) {
                                 gateScreen = AppGateScreen.Main.name
                             }
                         } else {
-                            ProfileRepository.pullProfiles()
-                            val pulled = ProfileRepository.state.value.profiles
-                            if (pulled.isNotEmpty()) {
-                                ProfileRepository.selectProfile(pulled.first().profileIndex)
-                                SyncManager.pullAllForProfile(pulled.first().profileIndex)
+                            // Seed default Admin profile so user isn't trapped on Add Profile screen
+                            scope.launch {
+                                ProfileRepository.createProfile(
+                                    name = "Admin",
+                                    avatarColorHex = "#00E699",
+                                    usesPrimaryAddons = true,
+                                )
+                            }
+                            if (gateScreen != AppGateScreen.Main.name) {
                                 gateScreen = AppGateScreen.Main.name
-                            } else {
-                                editingProfile = null
-                                isNewProfile = true
-                                gateScreen = AppGateScreen.ProfileEdit.name
                             }
                         }
                     }
@@ -742,6 +767,16 @@ fun App(
                     ) {
                         NuvioLoadingIndicator(color = MaterialTheme.nuvio.colors.accent)
                     }
+                }
+                AppGateScreen.Maintenance.name -> {
+                    MaintenanceModeScreen(
+                        onCheckAgain = {
+                            scope.launch {
+                                AdminControlRepository.fetchConfig()
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
                 AppGateScreen.LicenseActivation.name -> {
                     LicenseActivationScreen(
@@ -944,6 +979,8 @@ private fun MainAppContent(
         var pickerItem by remember { mutableStateOf<LibraryItem?>(null) }
         var pickerTitle by remember { mutableStateOf("") }
         var pickerTabs by remember { mutableStateOf<List<TrackingLibraryTab>>(emptyList()) }
+        val adminConfig by AdminControlRepository.config.collectAsStateWithLifecycle()
+        val dismissedTimestamp by AdminControlRepository.dismissedBroadcastTimestamp.collectAsStateWithLifecycle()
         var pickerMembership by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
         var pickerPending by remember { mutableStateOf(false) }
         var pickerError by remember { mutableStateOf<String?>(null) }
@@ -2220,6 +2257,51 @@ private fun MainAppContent(
                                                 onProfileSelected = onProfileSelected,
                                                 onAddProfileRequested = onSwitchProfile,
                                             )
+                                        }
+                                    }
+                                }
+
+                                if (adminConfig.broadcastMessage.isNotBlank() && adminConfig.broadcastTimestamp > dismissedTimestamp) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                                            .widthIn(min = 260.dp, max = 520.dp)
+                                            .zIndex(NuvioTokens.Z.toast),
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = Color(0xFF1E1611).copy(alpha = 0.95f),
+                                        border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.6f)),
+                                        shadowElevation = 6.dp,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Campaign,
+                                                contentDescription = "Alert",
+                                                tint = Color(0xFFFF9800),
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = adminConfig.broadcastMessage,
+                                                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontWeight = FontWeight.Medium),
+                                                modifier = Modifier.weight(1f, fill = false),
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            IconButton(
+                                                onClick = { AdminControlRepository.dismissBroadcast(adminConfig.broadcastTimestamp) },
+                                                modifier = Modifier.size(24.dp),
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Close,
+                                                    contentDescription = "Dismiss",
+                                                    tint = Color(0xFFAAAAAA),
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                            }
                                         }
                                     }
                                 }
