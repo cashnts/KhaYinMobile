@@ -165,23 +165,21 @@ jobs:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: all-artifacts
-          merge-multiple: true
+          name: android-artifacts
+          path: release-files
 
       - name: List Collected Release Files
         run: |
-          mkdir -p release-files
-          cp -r all-artifacts/* release-files/ 2>/dev/null || true
           echo "=== Collected Release Artifacts ==="
           ls -la release-files/
 
       # Upload to Cloudflare R2 using AWS CLI with custom S3 endpoint
       - name: Upload to Cloudflare R2 Bucket
-        if: ${{ (inputs.upload_to_r2 != false) }}
+        if: github.event_name == 'push' || inputs.upload_to_r2 != false
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
@@ -219,7 +217,7 @@ jobs:
 
       # Publish or update GitHub Release
       - name: Publish GitHub Release
-        if: ${{ (inputs.create_github_release != false) }}
+        if: github.event_name == 'push' || inputs.create_github_release != false
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ needs.metadata.outputs.version }}"
