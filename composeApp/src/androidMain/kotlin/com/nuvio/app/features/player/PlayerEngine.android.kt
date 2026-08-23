@@ -730,10 +730,11 @@ private fun ExoPlayerSurface(
                 }
 
                 override fun getAudioTracks(): List<AudioTrack> =
-                    exoPlayer.extractAudioTracks(context)
+                    exoPlayer.extractAudioTracks(context).filter { isAllowedAudioTrack(it) }
 
                 override fun getSubtitleTracks(): List<SubtitleTrack> {
-                    val tracks = exoPlayer.extractSubtitleTracks(context)
+                    val isPlus = com.nuvio.app.features.license.LicenseRepository.isPlusMember
+                    val tracks = exoPlayer.extractSubtitleTracks(context).filter { isAllowedSubtitleTrack(it, isPlus) }
                     Log.d(TAG, "getSubtitleTracks: found ${tracks.size} tracks")
                     tracks.forEach { t ->
                         Log.d(TAG, "  track idx=${t.index} id=${t.id} label='${t.label}' lang=${t.language} selected=${t.isSelected}")
@@ -1392,10 +1393,11 @@ private class NuvioLibmpvView(
                         language = track.language,
                         isSelected = track.isSelected,
                     )
-                }
+                }.filter { isAllowedAudioTrack(it) }
 
-            override fun getSubtitleTracks(): List<SubtitleTrack> =
-                extractLibmpvTracks(context, type = "sub").mapIndexed { index, track ->
+            override fun getSubtitleTracks(): List<SubtitleTrack> {
+                val isPlus = com.nuvio.app.features.license.LicenseRepository.isPlusMember
+                return extractLibmpvTracks(context, type = "sub").mapIndexed { index, track ->
                     SubtitleTrack(
                         index = index,
                         id = track.id.toString(),
@@ -1404,7 +1406,8 @@ private class NuvioLibmpvView(
                         isSelected = track.isSelected,
                         isForced = track.isForced,
                     )
-                }
+                }.filter { isAllowedSubtitleTrack(it, isPlus) }
+            }
 
             override fun selectAudioTrack(index: Int) {
                 if (index < 0) {
