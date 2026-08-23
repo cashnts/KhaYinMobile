@@ -893,8 +893,15 @@ fun App(
                             )
                         },
                         onSwitchProfile = {
-                            autoSkipProfileSelection = false
-                            gateScreen = AppGateScreen.ProfileSelection.name
+                            if (AppFeaturePolicy.isUserClient) {
+                                val active = profileState.activeProfile ?: profileState.profiles.firstOrNull()
+                                editingProfile = active
+                                isNewProfile = false
+                                gateScreen = AppGateScreen.ProfileEdit.name
+                            } else {
+                                autoSkipProfileSelection = false
+                                gateScreen = AppGateScreen.ProfileSelection.name
+                            }
                         },
                     )
                 }
@@ -3362,6 +3369,7 @@ private fun MainAppContent(
                     )
                     AccountSettingsScreen(
                         onBack = onBack,
+                        onCustomizeProfile = onSwitchProfile,
                     )
                 }
                 entry<SupportersContributorsSettingsRoute> { route ->

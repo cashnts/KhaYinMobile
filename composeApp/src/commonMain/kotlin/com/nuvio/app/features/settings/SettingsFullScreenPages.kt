@@ -193,6 +193,7 @@ fun PluginsSettingsScreen(
 @Composable
 fun AccountSettingsScreen(
     onBack: () -> Unit,
+    onCustomizeProfile: (() -> Unit)? = null,
 ) {
     NuvioScreen(
         modifier = Modifier.fillMaxSize(),
@@ -205,6 +206,7 @@ fun AccountSettingsScreen(
         }
         accountSettingsContent(
             isTablet = false,
+            onCustomizeProfile = onCustomizeProfile,
         )
     }
 }
