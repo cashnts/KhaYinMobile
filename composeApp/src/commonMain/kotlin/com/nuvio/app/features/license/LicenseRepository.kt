@@ -299,7 +299,6 @@ object LicenseRepository {
             }
 
             // If activating a different license key than last known, wipe previous account's local cache
-            val lastKnownKey = LicenseStorage.loadLastKnownKey()
             if (!lastKnownKey.isNullOrBlank() && !lastKnownKey.equals(info.key, ignoreCase = true)) {
                 LocalAccountDataCleaner.wipe()
             }
