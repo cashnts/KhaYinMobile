@@ -125,6 +125,7 @@ fun SettingsScreen(
     onExternalBack: (() -> Unit)? = null,
     showInternalHeader: Boolean = true,
     onSwitchProfile: (() -> Unit)? = null,
+    onCustomizeProfile: (() -> Unit)? = null,
     onHomescreenClick: () -> Unit = {},
     onMetaScreenClick: () -> Unit = {},
     onContinueWatchingClick: () -> Unit = {},
@@ -430,6 +431,7 @@ fun SettingsScreen(
                 continueWatchingPreferencesUiState = continueWatchingPreferencesUiState,
                 posterCardStyleUiState = posterCardStyleUiState,
                 onSwitchProfile = onSwitchProfile,
+                onCustomizeProfile = onCustomizeProfile,
                 onDownloadsClick = onDownloadsClick,
                 onSupportersContributorsClick = openSupportersContributors,
                 onLicensesAttributionsClick = openLicensesAttributions,
@@ -494,6 +496,7 @@ fun SettingsScreen(
                 continueWatchingPreferencesUiState = continueWatchingPreferencesUiState,
                 posterCardStyleUiState = posterCardStyleUiState,
                 onSwitchProfile = onSwitchProfile,
+                onCustomizeProfile = onCustomizeProfile,
                 onHomescreenClick = openHomescreen,
                 onMetaScreenClick = openMetaScreen,
                 onContinueWatchingClick = openContinueWatching,
@@ -568,6 +571,7 @@ private fun MobileSettingsScreen(
     continueWatchingPreferencesUiState: ContinueWatchingPreferencesUiState,
     posterCardStyleUiState: PosterCardStyleUiState,
     onSwitchProfile: (() -> Unit)? = null,
+    onCustomizeProfile: (() -> Unit)? = null,
     onHomescreenClick: () -> Unit = {},
     onMetaScreenClick: () -> Unit = {},
     onContinueWatchingClick: () -> Unit = {},
@@ -586,6 +590,7 @@ private fun MobileSettingsScreen(
         var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
         var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
         var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
+        var showRootLanguageSheet by rememberSaveable { mutableStateOf(false) }
         val listState = rememberLazyListState()
         val hapticFeedback = LocalHapticFeedback.current
         val hapticScope = rememberCoroutineScope()
@@ -683,6 +688,8 @@ private fun MobileSettingsScreen(
                     if (settingsSearchQuery.isBlank()) {
                         settingsRootContent(
                             isTablet = false,
+                            selectedAppLanguage = selectedAppLanguage,
+                            onAppLanguageClick = { showRootLanguageSheet = true },
                             onPlaybackClick = { onPageChange(SettingsPage.Playback) },
                             onAppearanceClick = { onPageChange(SettingsPage.Appearance) },
                             onAdvancedClick = { onPageChange(SettingsPage.Advanced) },
@@ -704,7 +711,7 @@ private fun MobileSettingsScreen(
                 }
                 SettingsPage.Account -> accountSettingsContent(
                     isTablet = false,
-                    onCustomizeProfile = onSwitchProfile,
+                    onCustomizeProfile = onCustomizeProfile ?: onSwitchProfile,
                 )
                 SettingsPage.SupportersContributors -> {
                     if (AppFeaturePolicy.supportersContributorsPageEnabled) {
@@ -832,6 +839,17 @@ private fun MobileSettingsScreen(
                 )
             }
         }
+
+        if (showRootLanguageSheet) {
+            AppearanceLanguageBottomSheet(
+                selectedLanguage = selectedAppLanguage,
+                onLanguageSelected = {
+                    onAppLanguageSelected(it)
+                    showRootLanguageSheet = false
+                },
+                onDismiss = { showRootLanguageSheet = false },
+            )
+        }
     }
 }
 
@@ -934,6 +952,7 @@ private fun TabletSettingsScreen(
     continueWatchingPreferencesUiState: ContinueWatchingPreferencesUiState,
     posterCardStyleUiState: PosterCardStyleUiState,
     onSwitchProfile: (() -> Unit)? = null,
+    onCustomizeProfile: (() -> Unit)? = null,
     onDownloadsClick: () -> Unit = {},
     onSupportersContributorsClick: () -> Unit = {},
     onLicensesAttributionsClick: () -> Unit = {},
@@ -945,6 +964,7 @@ private fun TabletSettingsScreen(
     val activeCategory = SettingsCategory.valueOf(selectedCategory)
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val topOffset = max(statusBarPadding + 24.dp, 48.dp) + 64.dp
+    var showRootLanguageSheet by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(page) {
         if (page.opensInlineOnTablet) {
@@ -1114,6 +1134,8 @@ private fun TabletSettingsScreen(
                         if (settingsSearchQuery.isBlank()) {
                             settingsRootContent(
                                 isTablet = true,
+                                selectedAppLanguage = selectedAppLanguage,
+                                onAppLanguageClick = { showRootLanguageSheet = true },
                                 onPlaybackClick = { openInlinePage(SettingsPage.Playback) },
                                 onAppearanceClick = { openInlinePage(SettingsPage.Appearance) },
                                 onAdvancedClick = { openInlinePage(SettingsPage.Advanced) },
@@ -1139,7 +1161,7 @@ private fun TabletSettingsScreen(
                     }
                     SettingsPage.Account -> accountSettingsContent(
                         isTablet = true,
-                        onCustomizeProfile = onSwitchProfile,
+                        onCustomizeProfile = onCustomizeProfile ?: onSwitchProfile,
                     )
                     SettingsPage.SupportersContributors -> {
                         if (AppFeaturePolicy.supportersContributorsPageEnabled) {
@@ -1266,6 +1288,17 @@ private fun TabletSettingsScreen(
                         onCommentsEnabledChange = TraktCommentsSettings::setEnabled,
                     )
                 }
+            }
+
+            if (showRootLanguageSheet) {
+                AppearanceLanguageBottomSheet(
+                    selectedLanguage = selectedAppLanguage,
+                    onLanguageSelected = {
+                        onAppLanguageSelected(it)
+                        showRootLanguageSheet = false
+                    },
+                    onDismiss = { showRootLanguageSheet = false },
+                )
             }
         }
     }
