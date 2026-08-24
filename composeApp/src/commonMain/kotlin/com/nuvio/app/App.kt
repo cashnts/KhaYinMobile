@@ -2282,10 +2282,16 @@ private fun MainAppContent(
                                 }
 
                                 val isBroadcastVisible = adminConfig.broadcastMessage.isNotBlank() && adminConfig.broadcastTimestamp > dismissedTimestamp
+                                val broadcastColor = when (adminConfig.broadcastSeverity.uppercase()) {
+                                    "WARNING" -> Color(0xFFFF9800)
+                                    "CRITICAL" -> Color(0xFFFF5252)
+                                    "PROMO" -> Color(0xFF00E699)
+                                    else -> Color(0xFF2196F3)
+                                }
 
                                 LaunchedEffect(adminConfig.broadcastTimestamp, adminConfig.broadcastMessage) {
                                     if (adminConfig.broadcastMessage.isNotBlank() && adminConfig.broadcastTimestamp > dismissedTimestamp) {
-                                        delay(12_000L)
+                                        delay(16_000L)
                                         AdminControlRepository.dismissBroadcast(adminConfig.broadcastTimestamp)
                                     }
                                 }
@@ -2303,8 +2309,8 @@ private fun MainAppContent(
                                     Surface(
                                         modifier = Modifier.widthIn(min = 260.dp, max = 520.dp),
                                         shape = RoundedCornerShape(20.dp),
-                                        color = Color(0xFF1E1611).copy(alpha = 0.95f),
-                                        border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.6f)),
+                                        color = Color(0xFF14141E).copy(alpha = 0.95f),
+                                        border = BorderStroke(1.dp, broadcastColor.copy(alpha = 0.7f)),
                                         shadowElevation = 6.dp,
                                     ) {
                                         Row(
@@ -2315,7 +2321,7 @@ private fun MainAppContent(
                                             Icon(
                                                 imageVector = Icons.Rounded.Campaign,
                                                 contentDescription = "Alert",
-                                                tint = Color(0xFFFF9800),
+                                                tint = broadcastColor,
                                                 modifier = Modifier.size(18.dp),
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))

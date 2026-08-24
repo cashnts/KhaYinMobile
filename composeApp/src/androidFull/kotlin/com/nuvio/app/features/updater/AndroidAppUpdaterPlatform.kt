@@ -63,7 +63,8 @@ object AndroidAppUpdaterPlatform {
         runCatching {
             val context = requireContext()
             val safeName = assetName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+            val baseDir = context.externalCacheDir ?: context.cacheDir
+            val updatesDir = File(baseDir, "updates").apply { mkdirs() }
             val destination = File(updatesDir, safeName)
             val tempFile = File(updatesDir, "$safeName.part")
 
@@ -130,18 +131,21 @@ object AndroidAppUpdaterPlatform {
                 tempFile.copyTo(destination, overwrite = true)
                 tempFile.delete()
             }
+            try {
+                destination.setReadable(true, false)
+            } catch (_: Exception) {
+            }
 
             destination.absolutePath
         }
     }
 
     fun canRequestPackageInstalls(): Boolean {
-        val context = appContext ?: return false
+        val context = appContext ?: return true
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 context.packageManager.canRequestPackageInstalls()
-            } catch (_: SecurityException) {
-            
+            } catch (_: Exception) {
                 true
             }
         } else {
@@ -152,17 +156,39 @@ object AndroidAppUpdaterPlatform {
     fun openUnknownSourcesSettings() {
         val context = appContext ?: return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val intent = Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}"),
-        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+
+        val attempts = listOf(
+            // 1. Specific app unknown sources screen
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")),
+            // 2. Generic unknown sources list (works on Android TV / Leanback)
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES),
+            // 3. Security settings (fallback on Android TV boxes)
+            Intent(Settings.ACTION_SECURITY_SETTINGS),
+            // 4. App details settings
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")),
+            // 5. Main settings
+            Intent(Settings.ACTION_SETTINGS),
+        )
+
+        for (intent in attempts) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return
+            } catch (_: Exception) {
+                // Try next fallback
+            }
+        }
     }
 
     fun installDownloadedApk(path: String): Result<Unit> = runCatching {
         val context = requireContext()
         val apkFile = File(path)
         check(apkFile.exists()) { runBlocking { getString(Res.string.updates_downloaded_file_missing) } }
+        try {
+            apkFile.setReadable(true, false)
+        } catch (_: Exception) {
+        }
 
         val apkUri = FileProvider.getUriForFile(
             context,
@@ -170,10 +196,34 @@ object AndroidAppUpdaterPlatform {
             apkFile,
         )
 
-        val intent = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(apkUri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        // Grant explicit read permission to all potential package installers (Android TV, Samsung, AOSP)
+        try {
+            val resolveInfoList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.queryIntentActivities(
+                    intent,
+                    android.content.pm.PackageManager.ResolveInfoFlags.of(android.content.pm.PackageManager.MATCH_DEFAULT_ONLY.toLong()),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            }
+            for (resolveInfo in resolveInfoList) {
+                val targetPackage = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(
+                    targetPackage,
+                    apkUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+        } catch (_: Exception) {
+        }
 
         context.startActivity(intent)
     }

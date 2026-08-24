@@ -56,6 +56,9 @@ import nuvio.composeapp.generated.resources.compose_settings_root_switch_profile
 import nuvio.composeapp.generated.resources.compose_settings_root_tracking_description
 import nuvio.composeapp.generated.resources.compose_settings_root_about_section
 import nuvio.composeapp.generated.resources.compose_settings_root_account_section
+import nuvio.composeapp.generated.resources.settings_subscription_and_license
+import nuvio.composeapp.generated.resources.settings_subscription_root_row_desc
+import nuvio.composeapp.generated.resources.settings_subscription_title
 import nuvio.composeapp.generated.resources.compose_settings_root_advanced_description
 import nuvio.composeapp.generated.resources.compose_settings_root_advanced_section
 import nuvio.composeapp.generated.resources.compose_settings_page_content_discovery
@@ -103,7 +106,7 @@ internal fun LazyListScope.settingsRootContent(
                 title = if (AppFeaturePolicy.isAdminClient) {
                     stringResource(Res.string.compose_settings_root_account_section)
                 } else {
-                    "Subscription"
+                    stringResource(Res.string.settings_subscription_title)
                 },
                 isTablet = isTablet,
             ) {
@@ -136,8 +139,8 @@ internal fun LazyListScope.settingsRootContent(
                         )
                     } else {
                         SettingsNavigationRow(
-                            title = "Subscription & License",
-                            description = "Active plan, expiry date, and license status",
+                            title = stringResource(Res.string.settings_subscription_and_license),
+                            description = stringResource(Res.string.settings_subscription_root_row_desc),
                             icon = Icons.Rounded.AccountCircle,
                             isTablet = isTablet,
                             onClick = onAccountClick,

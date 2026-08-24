@@ -95,7 +95,7 @@ android {
     val mobileAppName = if (isAdminClient) "KhaYin Admin" else "KhaYin"
 
     defaultConfig {
-        applicationId = "com.nuvio.app"
+        applicationId = "dev.khayin.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = releaseAppVersionCode
@@ -178,7 +178,7 @@ android {
 
 androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
-        variant.applicationId.set("com.nuviodebug.com")
+        variant.applicationId.set("dev.khayin.app.debug")
     }
 }
 
