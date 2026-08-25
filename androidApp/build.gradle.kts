@@ -28,13 +28,17 @@ fun envOrLocalProperty(key: String): String? =
         ?: localProps.getProperty(key)?.trim()?.takeIf { it.isNotBlank() }
         ?: (findProperty(key) as? String)?.trim()?.takeIf { it.isNotBlank() }
 
-val releaseStoreFile = envOrLocalProperty("NUVIO_RELEASE_STORE_FILE")
+val releaseStoreFile = envOrLocalProperty("KHAYIN_RELEASE_STORE_FILE")
+    ?: envOrLocalProperty("NUVIO_RELEASE_STORE_FILE")
     ?: envOrLocalProperty("RELEASE_STORE_FILE")
-val releaseStorePassword = envOrLocalProperty("NUVIO_RELEASE_STORE_PASSWORD")
+val releaseStorePassword = envOrLocalProperty("KHAYIN_RELEASE_STORE_PASSWORD")
+    ?: envOrLocalProperty("NUVIO_RELEASE_STORE_PASSWORD")
     ?: envOrLocalProperty("RELEASE_STORE_PASSWORD")
-val releaseKeyAlias = envOrLocalProperty("NUVIO_RELEASE_KEY_ALIAS")
+val releaseKeyAlias = envOrLocalProperty("KHAYIN_RELEASE_KEY_ALIAS")
+    ?: envOrLocalProperty("NUVIO_RELEASE_KEY_ALIAS")
     ?: envOrLocalProperty("RELEASE_KEY_ALIAS")
-val releaseKeyPassword = envOrLocalProperty("NUVIO_RELEASE_KEY_PASSWORD")
+val releaseKeyPassword = envOrLocalProperty("KHAYIN_RELEASE_KEY_PASSWORD")
+    ?: envOrLocalProperty("NUVIO_RELEASE_KEY_PASSWORD")
     ?: envOrLocalProperty("RELEASE_KEY_PASSWORD")
 val releaseKeystore = releaseStoreFile?.let { path ->
     val f = file(path)

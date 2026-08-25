@@ -97,13 +97,14 @@ jobs:
 
       - name: Configure Keystore from Secrets
         env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE_BASE64 }}
-          RELEASE_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 || secrets.RELEASE_PROPERTIES_BASE64 }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.KHAYIN_RELEASE_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE_BASE64 || secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_PROPERTIES_BASE64: ${{ secrets.KHAYIN_LOCAL_PROPERTIES_BASE64 || secrets.RELEASE_PROPERTIES_BASE64 || secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
         run: |
           if [ -n "${RELEASE_KEYSTORE_BASE64}" ]; then
             keystore_path="${RUNNER_TEMP}/nuvio-release.jks"
             printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
             echo "NUVIO_RELEASE_STORE_FILE=${keystore_path}" >> "$GITHUB_ENV"
+            echo "KHAYIN_RELEASE_STORE_FILE=${keystore_path}" >> "$GITHUB_ENV"
             echo "Loaded release keystore from secrets."
           fi
           if [ -n "${RELEASE_PROPERTIES_BASE64}" ]; then
@@ -116,12 +117,15 @@ jobs:
 
       - name: Build Android Release APK
         env:
-          NUVIO_RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
-          NUVIO_RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          NUVIO_RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
+          KHAYIN_RELEASE_STORE_PASSWORD: ${{ secrets.KHAYIN_RELEASE_STORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD || secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+          KHAYIN_RELEASE_KEY_ALIAS: ${{ secrets.KHAYIN_RELEASE_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS || secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          KHAYIN_RELEASE_KEY_PASSWORD: ${{ secrets.KHAYIN_RELEASE_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD || secrets.NUVIO_RELEASE_KEY_PASSWORD }}
+          NUVIO_RELEASE_STORE_PASSWORD: ${{ secrets.KHAYIN_RELEASE_STORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD || secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+          NUVIO_RELEASE_KEY_ALIAS: ${{ secrets.KHAYIN_RELEASE_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS || secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          NUVIO_RELEASE_KEY_PASSWORD: ${{ secrets.KHAYIN_RELEASE_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD || secrets.NUVIO_RELEASE_KEY_PASSWORD }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.KHAYIN_RELEASE_STORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD || secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KHAYIN_RELEASE_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS || secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.KHAYIN_RELEASE_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD || secrets.NUVIO_RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew :androidApp:assembleFullRelease \
             -Pnuvio.client.role=user \
