@@ -154,6 +154,7 @@ internal class PlayerScreenRuntime(
     var currentTrackingMedia by mutableStateOf<TrackingMediaReference?>(null)
 
     var showSourcesPanel by mutableStateOf(false)
+    var showResolutionPanel by mutableStateOf(false)
     var showEpisodesPanel by mutableStateOf(false)
     var showSubmitIntroModal by mutableStateOf(false)
     var submitIntroSegmentType by mutableStateOf("intro")

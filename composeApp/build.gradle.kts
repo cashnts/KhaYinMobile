@@ -309,7 +309,7 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL", "https://api.stream.khayin.net"))
     supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg3MjIwNTM2LCJleHAiOjE5NDQ5MDA1MzZ9.BpzwMmPVhF3RjDBMgnsKXRqn-3TI-c3QGeRB6-4vs6M"))
     supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL", "https://api.stream.khayin.net"))
-    sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
+    sentryDsn.set(runtimeConfigValue("SENTRY_DSN", "https://03b275d4c26ccf95402bcd0a9a9f9b7f@o4511970100641792.ingest.us.sentry.io/4511970104705024"))
     clientRole.set(runtimeConfigValue("NUVIO_CLIENT_ROLE", (findProperty("nuvio.client.role") as? String) ?: "user"))
     sentryEnvironment.set(
         when {

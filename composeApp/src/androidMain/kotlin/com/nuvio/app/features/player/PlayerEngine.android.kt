@@ -370,13 +370,14 @@ private fun ExoPlayerSurface(
         }
 
         val loadControl = DefaultLoadControl.Builder()
-            .setTargetBufferBytes(100 * 1024 * 1024)
+            .setTargetBufferBytes(200 * 1024 * 1024)
             .setBufferDurationsMs(
-                15_000,
-                70_000,
+                20_000,
+                120_000,
                 DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
                 5_000
             )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         val player = if (useLibass) {
@@ -1211,7 +1212,11 @@ private class NuvioLibmpvView(
         mpv.setOptionString("tls-verify", "yes")
         mpv.setOptionString("tls-ca-file", "${context.filesDir.path}/cacert.pem")
         mpv.setOptionString("demuxer-max-bytes", "${libmpvCacheBytes()}").logIfMpvError("demuxer-max-bytes")
-        mpv.setOptionString("demuxer-max-back-bytes", "${libmpvCacheBytes()}").logIfMpvError("demuxer-max-back-bytes")
+        mpv.setOptionString("demuxer-max-back-bytes", "${libmpvCacheBytes() / 2}").logIfMpvError("demuxer-max-back-bytes")
+        mpv.setOptionString("demuxer-readahead-secs", "120").logIfMpvError("demuxer-readahead-secs")
+        mpv.setOptionString("cache", "yes").logIfMpvError("cache")
+        mpv.setOptionString("cache-secs", "120").logIfMpvError("cache-secs")
+        mpv.setOptionString("cache-on-disk", "no").logIfMpvError("cache-on-disk")
         mpv.setOptionString("vd-lavc-film-grain", "cpu")
         mpv.setPropertyBoolean("keep-open", true)
         mpv.setPropertyBoolean("input-default-bindings", true)
@@ -1514,7 +1519,7 @@ private data class LibmpvTrack(
 )
 
 private fun libmpvCacheBytes(): Int =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 64 * 1024 * 1024 else 32 * 1024 * 1024
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 256 * 1024 * 1024 else 128 * 1024 * 1024
 
 private fun Int.logIfMpvError(option: String) {
     if (this < 0) Log.w(TAG, "libmpv option failed: $option status=$this")

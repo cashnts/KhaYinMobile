@@ -430,7 +430,7 @@
     <string name="compose_player_outline">Outline</string>
     <string name="compose_player_outline_color">Outline Color</string>
     <string name="compose_player_panel_episodes">အပိုင်းများ</string>
-    <string name="compose_player_panel_sources">Sources</string>
+    <string name="compose_player_panel_sources">ရုပ်ထွက် အရည်အသွေးများ</string>
     <string name="compose_player_panel_streams">လင့်ခ်များ</string>
     <string name="compose_player_playback_error">ဖွင့်စက် error</string>
     <string name="compose_player_playing">Playing</string>

@@ -285,6 +285,10 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                 null
             },
             onSourcesClick = if (activeVideoId != null) { { openSourcesPanel() } } else null,
+            onResolutionClick = if (activeVideoId != null) { { openResolutionPanel() } } else null,
+            activeResolutionLabel = PlayerResolutionHelper.detectResolutionTierFromText(
+                activeStreamTitle + " " + activeStreamSubtitle.orEmpty()
+            ).shortLabel.takeIf { it != "Auto" } ?: "Quality",
             onEpisodesClick = if (isSeries) { { openEpisodesPanel() } } else null,
             onOpenInExternalPlayer = args.onOpenInExternalPlayer?.let { openExternal ->
                 {
@@ -363,7 +367,9 @@ private fun BoxScope.RenderPlaybackOverlays(
         metrics = metrics,
         horizontalSafePadding = horizontalSafePadding,
         onUnlock = { unlockPlayerControls() },
-        showOpeningOverlay = playerSettingsUiState.showLoadingOverlay && !initialLoadCompleted && errorMessage == null,
+        showOpeningOverlay = playerSettingsUiState.showLoadingOverlay &&
+            !initialLoadCompleted &&
+            errorMessage == null,
         backdropArtwork = background ?: poster,
         logo = logo,
         title = title,
@@ -489,6 +495,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         },
         onVideoSettingsModalDismissed = { showVideoSettingsModal = false },
         showSourcesPanel = showSourcesPanel,
+        showResolutionPanel = showResolutionPanel,
         sourceStreamsState = sourceStreamsState,
         contentTitle = title,
         activeEpisodeTitle = activeEpisodeTitle,
@@ -510,6 +517,10 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         },
         onSourcesPanelDismissed = {
             showSourcesPanel = false
+            controlsVisible = true
+        },
+        onResolutionPanelDismissed = {
+            showResolutionPanel = false
             controlsVisible = true
         },
         isSeries = isSeries,
