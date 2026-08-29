@@ -224,20 +224,23 @@ object HomeRepository {
             manifestUrl = manifestUrl,
             type = type,
             catalogId = catalogId,
+            genre = genre,
             maxItems = HOME_CATALOG_PREVIEW_FETCH_LIMIT,
             forceRefresh = forceRefresh,
         )
         val items = page.items
+        val rowSubtitle = if (genre != null) "$addonName · $genre" else addonName
         if (items.isEmpty()) {
             return HomeCatalogSection(
                 key = key,
                 title = defaultTitle,
-                subtitle = addonName,
+                subtitle = rowSubtitle,
                 addonName = addonName,
                 target = CatalogTarget.Addon(
                     manifestUrl = manifestUrl,
                     contentType = type,
                     catalogId = catalogId,
+                    genre = genre,
                     supportsPagination = supportsPagination,
                 ),
                 items = emptyList(),
@@ -249,12 +252,13 @@ object HomeRepository {
         return HomeCatalogSection(
             key = key,
             title = defaultTitle,
-            subtitle = addonName,
+            subtitle = rowSubtitle,
             addonName = addonName,
             target = CatalogTarget.Addon(
                 manifestUrl = manifestUrl,
                 contentType = type,
                 catalogId = catalogId,
+                genre = genre,
                 supportsPagination = supportsPagination,
             ),
             items = items,

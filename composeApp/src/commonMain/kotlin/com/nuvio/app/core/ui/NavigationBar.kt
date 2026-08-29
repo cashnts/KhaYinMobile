@@ -4,6 +4,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +37,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -222,14 +229,21 @@ private class NuvioNavigationBarScopeImpl(
     ) {
         val tokens = MaterialTheme.nuvio
         val palette = ThemeColors.getColorPalette(MaterialTheme.appTheme)
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
         val iconColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent else tokens.colors.textMuted,
+            targetValue = if (selected || isFocused) tokens.colors.accent else tokens.colors.textMuted,
             label = "nav_icon_color",
         )
-        // Selected item gets a pill-shaped highlight using accent at low opacity
+        // Selected item gets a pill-shaped highlight using accent at low opacity; focused gets brighter outline/tint
         val selectedBgColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent.copy(alpha = NuvioTokens.Opacity.selected)
-            else Color.Transparent,
+            targetValue = when {
+                selected && isFocused -> tokens.colors.accent.copy(alpha = 0.28f)
+                selected -> tokens.colors.accent.copy(alpha = NuvioTokens.Opacity.selected)
+                isFocused -> tokens.colors.accent.copy(alpha = 0.16f)
+                else -> Color.Transparent
+            },
             label = "nav_bg_color",
         )
 
@@ -239,9 +253,21 @@ private class NuvioNavigationBarScopeImpl(
                     .weight(1f)
                     .clip(RoundedCornerShape(NuvioTokens.Radius.full))
                     .background(selectedBgColor)
+                    .border(
+                        width = if (isFocused) 2.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(NuvioTokens.Radius.full),
+                    )
+                    .graphicsLayer {
+                        scaleX = if (isFocused) 1.06f else 1.0f
+                        scaleY = if (isFocused) 1.06f else 1.0f
+                    }
+                    .focusable(interactionSource = interactionSource)
                     .selectable(
                         selected = selected,
                         enabled = true,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Tab,
                         onClick = onClick,
                     )
@@ -272,13 +298,20 @@ private class NuvioNavigationBarScopeImpl(
     ) {
         val tokens = MaterialTheme.nuvio
         val palette = ThemeColors.getColorPalette(MaterialTheme.appTheme)
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
         val iconColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent else tokens.colors.textMuted,
+            targetValue = if (selected || isFocused) tokens.colors.accent else tokens.colors.textMuted,
             label = "nav_icon_color",
         )
         val selectedBgColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent.copy(alpha = NuvioTokens.Opacity.selected)
-            else Color.Transparent,
+            targetValue = when {
+                selected && isFocused -> tokens.colors.accent.copy(alpha = 0.28f)
+                selected -> tokens.colors.accent.copy(alpha = NuvioTokens.Opacity.selected)
+                isFocused -> tokens.colors.accent.copy(alpha = 0.16f)
+                else -> Color.Transparent
+            },
             label = "nav_bg_color",
         )
 
@@ -288,9 +321,21 @@ private class NuvioNavigationBarScopeImpl(
                     .weight(1f)
                     .clip(RoundedCornerShape(NuvioTokens.Radius.full))
                     .background(selectedBgColor)
+                    .border(
+                        width = if (isFocused) 2.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(NuvioTokens.Radius.full),
+                    )
+                    .graphicsLayer {
+                        scaleX = if (isFocused) 1.06f else 1.0f
+                        scaleY = if (isFocused) 1.06f else 1.0f
+                    }
+                    .focusable(interactionSource = interactionSource)
                     .selectable(
                         selected = selected,
                         enabled = true,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Tab,
                         onClick = onClick,
                     )
@@ -319,13 +364,20 @@ private class NuvioNavigationBarScopeImpl(
         content: @Composable () -> Unit,
     ) {
         val tokens = MaterialTheme.nuvio
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
         val selectedBgColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent.copy(alpha = NuvioTokens.Opacity.selected)
-            else Color.Transparent,
+            targetValue = when {
+                selected && isFocused -> tokens.colors.accent.copy(alpha = 0.28f)
+                selected -> tokens.colors.accent.copy(alpha = NuvioTokens.Opacity.selected)
+                isFocused -> tokens.colors.accent.copy(alpha = 0.16f)
+                else -> Color.Transparent
+            },
             label = "nav_bg_color",
         )
         val iconColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent else tokens.colors.textMuted,
+            targetValue = if (selected || isFocused) tokens.colors.accent else tokens.colors.textMuted,
             label = "nav_icon_color",
         )
 
@@ -335,9 +387,21 @@ private class NuvioNavigationBarScopeImpl(
                     .weight(1f)
                     .clip(RoundedCornerShape(NuvioTokens.Radius.full))
                     .background(selectedBgColor)
+                    .border(
+                        width = if (isFocused) 2.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(NuvioTokens.Radius.full),
+                    )
+                    .graphicsLayer {
+                        scaleX = if (isFocused) 1.06f else 1.0f
+                        scaleY = if (isFocused) 1.06f else 1.0f
+                    }
+                    .focusable(interactionSource = interactionSource)
                     .selectable(
                         selected = selected,
                         enabled = true,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Tab,
                         onClick = onClick,
                     )
@@ -362,16 +426,13 @@ private fun NavItemLabel(
     Spacer(modifier = Modifier.height(NuvioTokens.Space.s3 * labelFraction))
     Box(
         modifier = Modifier
-            .height(NuvioTokens.Space.s14 * labelFraction)
-            .alpha(labelFraction),
+            .alpha(labelFraction)
+            .height(NuvioTokens.Space.s14 * labelFraction),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = NuvioTokens.Type.labelXs,
-                lineHeight = NuvioTokens.LineHeight.labelXs,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            ),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
             color = iconColor,
             maxLines = 1,
             overflow = TextOverflow.Clip,
@@ -391,7 +452,7 @@ fun NuvioClassicNavigationBar(
 ) {
     val tokens = MaterialTheme.nuvio
     Column(modifier.fillMaxWidth()) {
-        androidx.compose.material3.HorizontalDivider(
+        HorizontalDivider(
             thickness = NuvioTokens.Space.hairline,
             color = tokens.colors.borderDefault,
         )
@@ -422,8 +483,11 @@ private class NuvioClassicNavigationBarScopeImpl(
     ) {
         val tokens = MaterialTheme.nuvio
         val palette = ThemeColors.getColorPalette(MaterialTheme.appTheme)
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
         val iconColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent else tokens.colors.textMuted,
+            targetValue = if (selected || isFocused) tokens.colors.accent else tokens.colors.textMuted,
             label = "classic_nav_icon_color",
         )
         with(rowScope) {
@@ -433,9 +497,21 @@ private class NuvioClassicNavigationBarScopeImpl(
                     .fillMaxWidth()
                     .weight(1f, fill = false)
                     .clip(tokens.components.navItemShape)
+                    .border(
+                        width = if (isFocused) 2.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = tokens.components.navItemShape,
+                    )
+                    .graphicsLayer {
+                        scaleX = if (isFocused) 1.08f else 1.0f
+                        scaleY = if (isFocused) 1.08f else 1.0f
+                    }
+                    .focusable(interactionSource = interactionSource)
                     .selectable(
                         selected = selected,
                         enabled = true,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Tab,
                         onClick = onClick,
                     )
@@ -460,8 +536,11 @@ private class NuvioClassicNavigationBarScopeImpl(
     ) {
         val tokens = MaterialTheme.nuvio
         val palette = ThemeColors.getColorPalette(MaterialTheme.appTheme)
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
         val iconColor by animateColorAsState(
-            targetValue = if (selected) tokens.colors.accent else tokens.colors.textMuted,
+            targetValue = if (selected || isFocused) tokens.colors.accent else tokens.colors.textMuted,
             label = "classic_nav_icon_color",
         )
         with(rowScope) {
@@ -471,9 +550,21 @@ private class NuvioClassicNavigationBarScopeImpl(
                     .fillMaxWidth()
                     .weight(1f, fill = false)
                     .clip(tokens.components.navItemShape)
+                    .border(
+                        width = if (isFocused) 2.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = tokens.components.navItemShape,
+                    )
+                    .graphicsLayer {
+                        scaleX = if (isFocused) 1.08f else 1.0f
+                        scaleY = if (isFocused) 1.08f else 1.0f
+                    }
+                    .focusable(interactionSource = interactionSource)
                     .selectable(
                         selected = selected,
                         enabled = true,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Tab,
                         onClick = onClick,
                     )
@@ -496,6 +587,9 @@ private class NuvioClassicNavigationBarScopeImpl(
         content: @Composable () -> Unit,
     ) {
         val tokens = MaterialTheme.nuvio
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
         with(rowScope) {
             Box(
                 modifier = modifier
@@ -503,9 +597,21 @@ private class NuvioClassicNavigationBarScopeImpl(
                     .fillMaxWidth()
                     .weight(1f, fill = false)
                     .clip(tokens.components.navItemShape)
+                    .border(
+                        width = if (isFocused) 2.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = tokens.components.navItemShape,
+                    )
+                    .graphicsLayer {
+                        scaleX = if (isFocused) 1.08f else 1.0f
+                        scaleY = if (isFocused) 1.08f else 1.0f
+                    }
+                    .focusable(interactionSource = interactionSource)
                     .selectable(
                         selected = selected,
                         enabled = true,
+                        interactionSource = interactionSource,
+                        indication = null,
                         role = Role.Tab,
                         onClick = onClick,
                     )

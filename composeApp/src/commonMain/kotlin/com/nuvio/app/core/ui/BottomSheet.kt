@@ -1,7 +1,11 @@
 package com.nuvio.app.core.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
@@ -19,13 +23,17 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,10 +95,29 @@ fun NuvioBottomSheetActionRow(
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+            .background(if (isFocused) tokens.colors.accent.copy(alpha = 0.22f) else Color.Transparent)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(NuvioTokens.Radius.md),
+            )
+            .graphicsLayer {
+                scaleX = if (isFocused) 1.02f else 1.0f
+                scaleY = if (isFocused) 1.02f else 1.0f
+            }
+            .focusable(interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
             .padding(horizontal = tokens.spacing.screenHorizontal, vertical = tokens.spacing.screenHorizontal),
         horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s14),
         verticalAlignment = Alignment.CenterVertically,
@@ -99,7 +126,7 @@ fun NuvioBottomSheetActionRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = tokens.colors.accent,
+                tint = if (isFocused) Color.White else tokens.colors.accent,
                 modifier = Modifier.size(NuvioTokens.Icon.md),
             )
         }
@@ -107,7 +134,7 @@ fun NuvioBottomSheetActionRow(
             text = title,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.titleMedium,
-            color = tokens.colors.textPrimary,
+            color = if (isFocused) Color.White else tokens.colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

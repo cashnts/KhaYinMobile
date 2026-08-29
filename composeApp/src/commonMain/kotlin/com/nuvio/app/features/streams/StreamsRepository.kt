@@ -289,15 +289,22 @@ object StreamsRepository {
                             activeResolverProviderId = debridSettings.activeResolverProviderId,
                         )
                         val directCandidates = evaluation.readyStreams.filter {
-                            it.playableDirectUrl != null || it.isDirectDebridStream || it.isCachedDebridTorrentStream
+                            !it.isUncachedStream &&
+                            !it.isLowQualitySource &&
+                            (it.isConfirmedCached || it.playableDirectUrl != null || it.isDirectDebridStream || it.isCachedDebridTorrentStream || (it.seedersCount ?: 0) >= 5)
                         }
                         val anyLoading = _uiState.value.isAnyLoading
 
                         if (directCandidates.isNotEmpty() || !anyLoading) {
-                            val candidatePool = if (directCandidates.isNotEmpty()) directCandidates else evaluation.readyStreams.ifEmpty { allStreams }
+                            val candidatePool = if (directCandidates.isNotEmpty()) {
+                                directCandidates
+                            } else {
+                                val cachedOrGood = evaluation.readyStreams.filter { !it.isUncachedStream && !it.isLowQualitySource }
+                                if (cachedOrGood.isNotEmpty()) cachedOrGood else evaluation.readyStreams.ifEmpty { allStreams }
+                            }
                             autoSelectTriggered = true
                             launch {
-                                val fastestStream = StreamHealthProber.findFastestLivingStream(candidatePool, timeoutMs = 1200L)
+                                val fastestStream = StreamHealthProber.findFastestLivingStream(candidatePool, timeoutMs = 600L)
                                     ?: candidatePool.firstOrNull()
                                 if (fastestStream != null) {
                                     _uiState.update {

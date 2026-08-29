@@ -1,14 +1,24 @@
 package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntSize
@@ -72,11 +82,131 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
 
     val runtime = remember { PlayerScreenRuntime(args) }
     runtime.args = args
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     BoxWithConstraints(
         modifier = args.modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+
+                val isModalOpen = runtime.showAudioModal ||
+                    runtime.showSubtitleModal ||
+                    runtime.showVideoSettingsModal ||
+                    runtime.showSourcesPanel ||
+                    runtime.showResolutionPanel ||
+                    runtime.showEpisodesPanel ||
+                    runtime.showSubmitIntroModal
+
+                when (event.key) {
+                    Key.DirectionCenter,
+                    Key.Enter,
+                    Key.NumPadEnter,
+                    Key.Spacebar -> {
+                        if (isModalOpen) {
+                            false
+                        } else if (!runtime.controlsVisible) {
+                            runtime.controlsVisible = true
+                            runtime.togglePlayback()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Key.MediaPlayPause -> {
+                        runtime.togglePlayback()
+                        true
+                    }
+                    Key.MediaPlay -> {
+                        if (!runtime.playbackSnapshot.isPlaying) {
+                            runtime.togglePlayback()
+                        }
+                        runtime.controlsVisible = true
+                        true
+                    }
+                    Key.MediaPause -> {
+                        if (runtime.playbackSnapshot.isPlaying) {
+                            runtime.togglePlayback()
+                        }
+                        runtime.controlsVisible = true
+                        true
+                    }
+                    Key.DirectionLeft -> {
+                        if (isModalOpen) {
+                            false
+                        } else {
+                            runtime.seekBy(-10_000L)
+                            true
+                        }
+                    }
+                    Key.DirectionRight -> {
+                        if (isModalOpen) {
+                            false
+                        } else {
+                            runtime.seekBy(10_000L)
+                            true
+                        }
+                    }
+                    Key.MediaRewind,
+                    Key.MediaStepBackward -> {
+                        runtime.seekBy(-10_000L)
+                        true
+                    }
+                    Key.MediaFastForward,
+                    Key.MediaStepForward -> {
+                        runtime.seekBy(10_000L)
+                        true
+                    }
+                    Key.DirectionUp,
+                    Key.DirectionDown -> {
+                        if (isModalOpen) {
+                            false
+                        } else if (!runtime.controlsVisible) {
+                            runtime.controlsVisible = true
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Key.MediaNext -> {
+                        if (runtime.isSeries) {
+                            runtime.playNextEpisode()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Key.Back,
+                    Key.Escape -> {
+                        if (isModalOpen) {
+                            runtime.showAudioModal = false
+                            runtime.showSubtitleModal = false
+                            runtime.showVideoSettingsModal = false
+                            runtime.showSourcesPanel = false
+                            runtime.showResolutionPanel = false
+                            runtime.showEpisodesPanel = false
+                            runtime.showSubmitIntroModal = false
+                            runtime.controlsVisible = true
+                            true
+                        } else if (runtime.controlsVisible) {
+                            runtime.controlsVisible = false
+                            true
+                        } else {
+                            runtime.flushWatchProgress()
+                            args.onBack()
+                            true
+                        }
+                    }
+                    else -> false
+                }
+            },
     ) {
         val density = LocalDensity.current
         val horizontalSafePadding = playerHorizontalSafePadding()

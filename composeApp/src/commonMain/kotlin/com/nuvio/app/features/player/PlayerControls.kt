@@ -42,8 +42,12 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -374,12 +378,21 @@ private fun PlayerHeaderIconButton(
     iconSize: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Box(
         modifier = Modifier
             .size(buttonSize)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(onClick = onClick),
+            .background(if (isFocused) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.35f))
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.15f),
+                shape = CircleShape,
+            )
+            .focusable(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -433,10 +446,20 @@ private fun SideControlButton(
     metrics: PlayerLayoutMetrics,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White.copy(alpha = 0.25f) else Color.Transparent)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = CircleShape,
+            )
+            .focusable(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(metrics.sideButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -459,11 +482,20 @@ private fun PlayPauseControlButton(
     val playPausePainter = appIconPainter(
         if (isPlaying) AppIconResource.PlayerPause else AppIconResource.PlayerPlay,
     )
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White.copy(alpha = 0.28f) else Color.Transparent)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = CircleShape,
+            )
+            .focusable(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(metrics.playButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -727,10 +759,20 @@ private fun PlayerActionPillButton(
     icon: ImageVector? = null,
     painter: Painter? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White.copy(alpha = 0.3f) else Color.Transparent)
+            .border(
+                width = if (isFocused) 1.5.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(22.dp),
+            )
+            .focusable(interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -752,7 +794,9 @@ private fun PlayerActionPillButton(
         }
         Text(
             text = label,
-            style = MaterialTheme.nuvioTypeScale.labelSm,
+            style = MaterialTheme.nuvioTypeScale.labelSm.copy(
+                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+            ),
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -370,12 +370,12 @@ private fun ExoPlayerSurface(
         }
 
         val loadControl = DefaultLoadControl.Builder()
-            .setTargetBufferBytes(200 * 1024 * 1024)
+            .setTargetBufferBytes(64 * 1024 * 1024)
             .setBufferDurationsMs(
-                20_000,
-                120_000,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                5_000
+                15_000,
+                60_000,
+                600,
+                1_200
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -683,6 +683,13 @@ private fun ExoPlayerSurface(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            playerViewRef?.apply {
+                player = null
+                keepScreenOn = false
+            }
+            playerViewRef = null
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
             exoPlayer.release()
         }
     }
@@ -895,6 +902,10 @@ private fun ExoPlayerSurface(
                 renderType = libassRenderType,
             )
             playerView.applySubtitleStyle(currentSubtitleStyle, pipSubtitleScale)
+        },
+        onRelease = { playerView ->
+            playerView.player = null
+            playerView.keepScreenOn = false
         },
     )
 }

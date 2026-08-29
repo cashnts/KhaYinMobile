@@ -1,5 +1,6 @@
 package com.nuvio.app
 
+import com.nuvio.app.core.analytics.PostHogAnalytics
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -476,6 +477,12 @@ fun App(
             .crossfade(true)
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
+            .memoryCache {
+                coil3.memory.MemoryCache.Builder()
+                    .maxSizePercent(context, 0.20)
+                    .strongReferencesEnabled(true)
+                    .build()
+            }
             .components {
                 add(SvgDecoder.Factory())
                 add(
@@ -522,6 +529,13 @@ fun App(
 
         LaunchedEffect(Unit) {
             if (!ownsAppRuntime) return@LaunchedEffect
+            val lastKnownLicense = com.nuvio.app.features.license.LicenseStorage.loadLastKnownKey()?.takeIf { it.isNotBlank() }
+            com.nuvio.app.core.analytics.PostHogAnalytics.initialize(
+                platform = "Mobile",
+                version = com.nuvio.app.core.build.AppVersionConfig.VERSION_NAME,
+                distinctId = lastKnownLicense
+            )
+            com.nuvio.app.core.analytics.PostHogAnalytics.capture("app_launched")
             NetworkStatusRepository.ensureStarted()
             ProfileRepository.loadCachedProfiles()
             AvatarRepository.fetchAvatars()
@@ -1161,6 +1175,7 @@ private fun MainAppContent(
 
     LaunchedEffect(selectedTab) {
         NativeTabBridge.publishSelectedTab(selectedTab.toNativeNavigationTab())
+        PostHogAnalytics.screen(selectedTab.name)
         if (selectedTab != AppScreenTab.Search) {
             searchFocusRequestCount = 0
         }

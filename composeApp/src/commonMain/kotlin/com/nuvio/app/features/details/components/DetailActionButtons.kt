@@ -4,8 +4,12 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -23,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -90,10 +95,18 @@ fun DetailActionButtons(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val playInteractionSource = remember { MutableInteractionSource() }
+            val isPlayFocused by playInteractionSource.collectIsFocusedAsState()
+
             Surface(
                 modifier = Modifier
                     .weight(1f)
-                    .height(buttonHeight),
+                    .height(buttonHeight)
+                    .border(
+                        width = if (isPlayFocused) 2.5.dp else 0.dp,
+                        color = if (isPlayFocused) Color.White else Color.Transparent,
+                        shape = playShape,
+                    ),
                 shape = playShape,
                 color = MaterialTheme.colorScheme.onBackground,
                 contentColor = MaterialTheme.colorScheme.background,
@@ -101,7 +114,10 @@ fun DetailActionButtons(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .focusable(interactionSource = playInteractionSource)
                         .combinedClickable(
+                            interactionSource = playInteractionSource,
+                            indication = null,
                             onClick = {
                                 onPlayClick()
                             },
@@ -172,8 +188,17 @@ fun DetailActionButtons(
             }
 
             if (hasSecondaryActions) {
+                val menuInteractionSource = remember { MutableInteractionSource() }
+                val isMenuFocused by menuInteractionSource.collectIsFocusedAsState()
+
                 Surface(
-                    modifier = Modifier.size(iconButtonSize),
+                    modifier = Modifier
+                        .size(iconButtonSize)
+                        .border(
+                            width = if (isMenuFocused) 2.5.dp else 0.dp,
+                            color = if (isMenuFocused) Color.White else Color.Transparent,
+                            shape = CircleShape,
+                        ),
                     shape = CircleShape,
                     color = if (actionsExpanded) {
                         MaterialTheme.colorScheme.onBackground
@@ -189,7 +214,8 @@ fun DetailActionButtons(
                     Box(
                         modifier = Modifier
                             .size(iconButtonSize)
-                            .clickable(role = Role.Button) {
+                            .focusable(interactionSource = menuInteractionSource)
+                            .clickable(interactionSource = menuInteractionSource, indication = null, role = Role.Button) {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 actionsExpanded = !actionsExpanded
                             },
@@ -223,12 +249,21 @@ private fun DetailIconAction(
     size: Dp,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Surface(
-        modifier = modifier.graphicsLayer {
-            alpha = progress
-            scaleX = 0.86f + (0.14f * progress)
-            scaleY = 0.86f + (0.14f * progress)
-        },
+        modifier = modifier
+            .graphicsLayer {
+                alpha = progress
+                scaleX = 0.86f + (0.14f * progress)
+                scaleY = 0.86f + (0.14f * progress)
+            }
+            .border(
+                width = if (isFocused) 2.5.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = CircleShape,
+            ),
         shape = CircleShape,
         color = if (active) {
             MaterialTheme.colorScheme.onBackground
@@ -245,7 +280,10 @@ private fun DetailIconAction(
         Box(
             modifier = Modifier
                 .size(size)
+                .focusable(interactionSource = interactionSource)
                 .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
                     onClick = onClick,
                     onLongClick = onLongClick,
                     role = Role.Button,

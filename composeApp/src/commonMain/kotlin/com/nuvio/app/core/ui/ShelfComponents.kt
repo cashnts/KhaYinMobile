@@ -1,9 +1,16 @@
 package com.nuvio.app.core.ui
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -34,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -288,21 +298,34 @@ private fun NuvioViewAllPill(
     val actionSize = if (size == NuvioViewAllPillSize.Compact) NuvioTokens.Space.s32 else NuvioTokens.Space.s40
     val iconSize = if (size == NuvioViewAllPillSize.Compact) NuvioTokens.Icon.sm else tokens.icons.md
     val viewAllText = stringResource(Res.string.home_view_all)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     Box(
         modifier = modifier
             .size(actionSize)
             .background(
-                color = tokens.colors.surface,
+                color = if (isFocused) tokens.colors.accent.copy(alpha = 0.35f) else tokens.colors.surface,
                 shape = RoundedCornerShape(NuvioTokens.Radius.xl),
             )
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(NuvioTokens.Radius.xl),
+            )
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .focusable(interactionSource = interactionSource)
+                        .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                } else Modifier,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = viewAllText,
-            tint = tokens.colors.textMuted,
+            tint = if (isFocused) Color.White else tokens.colors.textMuted,
             modifier = Modifier.size(iconSize),
         )
     }
@@ -358,9 +381,30 @@ internal fun Modifier.posterCardClickable(
 ): Modifier {
     if (onClick == null && onLongClick == null) return this
     val bounds = remember { mutableStateOf<Rect?>(null) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.06f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "posterCardFocusScale",
+    )
+
     return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .border(
+            width = if (isFocused) 2.5.dp else 0.dp,
+            color = if (isFocused) Color.White else Color.Transparent,
+            shape = RoundedCornerShape(zoomCornerRadius),
+        )
         .onGloballyPositioned { coordinates -> bounds.value = coordinates.unclippedBoundsInRoot() }
+        .focusable(interactionSource = interactionSource)
         .combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
             onClick = { onClick?.invoke() },
             onLongClick = onLongClick?.let { longClick ->
                 {

@@ -19,6 +19,7 @@ data class HomeCatalogDefinition(
     val manifestUrl: String,
     val type: String,
     val catalogId: String,
+    val genre: String? = null,
     val supportsPagination: Boolean,
     val descriptorSignature: String,
 ) {
@@ -26,7 +27,7 @@ data class HomeCatalogDefinition(
         get() = "$key|$descriptorSignature"
 
     fun titleFor(showCatalogType: Boolean): String =
-        if (showCatalogType) defaultTitle else catalogName
+        if (showCatalogType) defaultTitle else (if (genre != null) "$catalogName · $genre" else catalogName)
 }
 
 fun buildHomeCatalogRefreshSignature(addons: List<ManagedAddon>): List<String> =
@@ -34,8 +35,13 @@ fun buildHomeCatalogRefreshSignature(addons: List<ManagedAddon>): List<String> =
         val manifest = addon.manifest ?: return@mapNotNull null
         addon to manifest
     }.flatMap { (addon, manifest) ->
-        manifest.catalogs.map { catalog ->
-            buildHomeCatalogDescriptorSignature(addon, manifest, catalog)
+        manifest.catalogs.flatMap { catalog ->
+            val genreExtra = catalog.extra.firstOrNull { it.name.equals("genre", ignoreCase = true) }
+            val baseSignature = buildHomeCatalogDescriptorSignature(addon, manifest, catalog, null)
+            val genreSignatures = genreExtra?.options.orEmpty().map { genre ->
+                buildHomeCatalogDescriptorSignature(addon, manifest, catalog, genre)
+            }
+            listOf(baseSignature) + genreSignatures
         }
     }.sorted()
 
@@ -45,25 +51,55 @@ fun buildHomeCatalogDefinitions(addons: List<ManagedAddon>): List<HomeCatalogDef
         addon to manifest
     }.flatMap { (addon, manifest) ->
         manifest.catalogs
-            .filter { catalog -> catalog.extra.none { it.isRequired } }
-            .map { catalog ->
-                HomeCatalogDefinition(
-                    key = "${manifest.id}:${catalog.type}:${catalog.id}",
-                    defaultTitle = runBlocking {
-                        getString(
-                            Res.string.home_catalog_default_title,
-                            catalog.name,
-                            localizedMediaTypeLabel(catalog.type),
+            .flatMap { catalog ->
+                val list = mutableListOf<HomeCatalogDefinition>()
+                val supportsPagination = catalog.supportsPagination()
+                val typeLabel = localizedMediaTypeLabel(catalog.type)
+
+                if (catalog.extra.none { it.isRequired }) {
+                    list.add(
+                        HomeCatalogDefinition(
+                            key = "${manifest.id}:${catalog.type}:${catalog.id}",
+                            defaultTitle = runBlocking {
+                                getString(
+                                    Res.string.home_catalog_default_title,
+                                    catalog.name,
+                                    typeLabel,
+                                )
+                            },
+                            catalogName = catalog.name,
+                            addonName = addon.displayTitle,
+                            manifestUrl = addon.manifestUrl,
+                            type = catalog.type,
+                            catalogId = catalog.id,
+                            genre = null,
+                            supportsPagination = supportsPagination,
+                            descriptorSignature = buildHomeCatalogDescriptorSignature(addon, manifest, catalog, null),
                         )
-                    },
-                    catalogName = catalog.name,
-                    addonName = addon.displayTitle,
-                    manifestUrl = addon.manifestUrl,
-                    type = catalog.type,
-                    catalogId = catalog.id,
-                    supportsPagination = catalog.supportsPagination(),
-                    descriptorSignature = buildHomeCatalogDescriptorSignature(addon, manifest, catalog),
-                )
+                    )
+                }
+
+                val genreExtra = catalog.extra.firstOrNull { it.name.equals("genre", ignoreCase = true) }
+                genreExtra?.options.orEmpty().forEach { genreOption ->
+                    val cleanGenre = genreOption.trim()
+                    if (cleanGenre.isNotBlank()) {
+                        list.add(
+                            HomeCatalogDefinition(
+                                key = "${manifest.id}:${catalog.type}:${catalog.id}:${cleanGenre.lowercase()}",
+                                defaultTitle = "$cleanGenre ($typeLabel)",
+                                catalogName = "${catalog.name} · $cleanGenre",
+                                addonName = addon.displayTitle,
+                                manifestUrl = addon.manifestUrl,
+                                type = catalog.type,
+                                catalogId = catalog.id,
+                                genre = cleanGenre,
+                                supportsPagination = supportsPagination,
+                                descriptorSignature = buildHomeCatalogDescriptorSignature(addon, manifest, catalog, cleanGenre),
+                            )
+                        )
+                    }
+                }
+                list
             }
     }.distinctBy(HomeCatalogDefinition::key)
 
@@ -71,6 +107,7 @@ private fun buildHomeCatalogDescriptorSignature(
     addon: ManagedAddon,
     manifest: AddonManifest,
     catalog: AddonCatalog,
+    genre: String? = null,
 ): String =
     buildString {
         append(addon.displayTitle)
@@ -123,6 +160,8 @@ private fun buildHomeCatalogDescriptorSignature(
         append(catalog.name)
         append('|')
         append(catalog.supportsPagination())
+        append('|')
+        append(genre.orEmpty())
         append('|')
         append(catalog.extra.joinToString(",") { extra ->
             listOf(

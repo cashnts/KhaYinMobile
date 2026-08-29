@@ -1,9 +1,13 @@
 package com.nuvio.app.features.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -277,9 +282,22 @@ fun HomeHeroSection(
 
                     if (!layout.isTablet) {
                         Spacer(modifier = Modifier.height(10.dp))
+                        val heroInteractionSource = remember { MutableInteractionSource() }
+                        val isHeroFocused by heroInteractionSource.collectIsFocusedAsState()
+
                         Surface(
                             modifier = Modifier
-                                .clickable(enabled = onItemClick != null) {
+                                .border(
+                                    width = if (isHeroFocused) 2.5.dp else 0.dp,
+                                    color = if (isHeroFocused) Color.White else Color.Transparent,
+                                    shape = RoundedCornerShape(40.dp),
+                                )
+                                .focusable(interactionSource = heroInteractionSource)
+                                .clickable(
+                                    interactionSource = heroInteractionSource,
+                                    indication = null,
+                                    enabled = onItemClick != null,
+                                ) {
                                     onItemClick?.invoke(currentItem)
                                 },
                             color = MaterialTheme.colorScheme.onBackground,

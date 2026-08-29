@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import co.touchlab.kermit.Logger
+import com.nuvio.app.core.analytics.PostHogAnalytics
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.buildAddonResourceUrl
@@ -250,6 +251,15 @@ object PlayerStreamsRepository {
             isAnyLoading = isInitiallyLoading,
         )
 
+        PostHogAnalytics.trackStreamFetchStarted(
+            type = type,
+            videoId = videoId,
+            season = season,
+            episode = episode,
+            addonCount = streamAddons.size,
+            pluginCount = pluginProviderGroups.size,
+        )
+
         val job = scope.launch {
             val installedAddonIds = streamAddons.map { it.addonId }.toSet()
             val installedAddonNames = installedAddonOrder.toSet()
@@ -418,25 +428,23 @@ object PlayerStreamsRepository {
 
                         stateFlow.update { current ->
                             val updated = StreamAutoPlaySelector.orderAddonStreams(
-                                groups = current.groups.map { group ->
-                                    if (group.addonId != completion.addonId) {
-                                        group
+                                groups = current.groups.map { currentGroup ->
+                                    if (currentGroup.addonId != completion.addonId) {
+                                        currentGroup
                                     } else {
                                         val mergedStreams = if (completion.streams.isEmpty()) {
-                                            group.streams
+                                            currentGroup.streams
                                         } else {
-                                            (group.streams + completion.streams).sortedForGroupedDisplay()
+                                            (currentGroup.streams + completion.streams).sortedForGroupedDisplay()
                                         }
-                                        val stillLoading = remaining > 0
-                                        val finalError = if (mergedStreams.isEmpty() && !stillLoading) {
-                                            pluginFirstErrorByAddonId[completion.addonId]
-                                        } else {
-                                            null
-                                        }
-                                        group.copy(
+                                        currentGroup.copy(
                                             streams = mergedStreams,
-                                            isLoading = stillLoading,
-                                            error = finalError,
+                                            isLoading = remaining > 0,
+                                            error = if (mergedStreams.isEmpty() && remaining == 0) {
+                                                pluginFirstErrorByAddonId[completion.addonId]
+                                            } else {
+                                                null
+                                            },
                                         )
                                     }
                                 },
@@ -479,6 +487,17 @@ object PlayerStreamsRepository {
                 }
             }
             completions.close()
+
+            val finalState = stateFlow.value
+            val totalStreams = finalState.groups.sumOf { it.streams.size }
+            PostHogAnalytics.trackStreamFetchCompleted(
+                type = type,
+                videoId = videoId,
+                totalStreams = totalStreams,
+                groupCount = finalState.groups.size,
+                isEmpty = totalStreams == 0,
+                emptyReason = finalState.emptyStateReason?.name,
+            )
         }
         setJob(job)
     }

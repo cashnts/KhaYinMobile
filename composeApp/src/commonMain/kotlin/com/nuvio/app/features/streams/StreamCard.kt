@@ -10,7 +10,10 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,12 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,36 +64,40 @@ internal fun StreamCard(
     val cardShape = RoundedCornerShape(12.dp)
     val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
     val hasBadges = badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 68.dp)
             .shadow(
-                elevation = 2.dp,
+                elevation = if (isFocused) 6.dp else 2.dp,
                 shape = cardShape,
                 ambientColor = Color.Black.copy(alpha = 0.04f),
                 spotColor = Color.Black.copy(alpha = 0.04f),
             )
             .clip(cardShape)
             .background(
-                if (isCurrent) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                } else {
-                    Color.White.copy(alpha = 0.05f)
+                when {
+                    isFocused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                    isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    else -> Color.White.copy(alpha = 0.05f)
                 },
             )
-            .then(
-                if (isCurrent) {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.52f),
-                        shape = cardShape,
-                    )
-                } else {
-                    Modifier
-                },
+            .border(
+                width = if (isFocused) 2.5.dp else if (isCurrent) 1.dp else 0.dp,
+                color = if (isFocused) Color.White else if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.52f) else Color.Transparent,
+                shape = cardShape,
             )
+            .graphicsLayer {
+                scaleX = if (isFocused) 1.02f else 1.0f
+                scaleY = if (isFocused) 1.02f else 1.0f
+            }
+            .focusable(interactionSource = interactionSource)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,

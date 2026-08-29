@@ -1,7 +1,11 @@
 package com.nuvio.app.core.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 data class NuvioDropdownOption(
@@ -52,14 +59,30 @@ fun NuvioDropdownChip(
     var isSheetVisible by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     Row(
         modifier = modifier
             .clip(tokens.shapes.compactCard)
             .background(tokens.colors.surface)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = tokens.shapes.compactCard,
+            )
+            .graphicsLayer {
+                scaleX = if (isFocused) 1.05f else 1.0f
+                scaleY = if (isFocused) 1.05f else 1.0f
+            }
             .then(
                 if (enabled) {
-                    Modifier.clickable { isSheetVisible = true }
+                    Modifier
+                        .focusable(interactionSource = interactionSource)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                        ) { isSheetVisible = true }
                 } else {
                     Modifier
                 },
