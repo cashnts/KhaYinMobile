@@ -981,7 +981,6 @@ private fun MainAppContent(
                 ProfileSettingsSync.startObserving()
             }
         }
-        val hapticFeedback = LocalHapticFeedback.current
         val focusManager = LocalFocusManager.current
         val uriHandler = LocalUriHandler.current
         val coroutineScope = rememberCoroutineScope()
