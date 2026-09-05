@@ -2,7 +2,7 @@ package com.nuvio.app.features.addons
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.nuvio.app.core.diagnostics.SentryNetworkBreadcrumbInterceptor
+import com.nuvio.app.core.diagnostics.PostHogNetworkLogInterceptor
 import com.nuvio.app.core.network.IPv4FirstDns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
