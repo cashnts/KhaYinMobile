@@ -35,12 +35,6 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     abstract val supabaseFallbackUrl: Property<String>
 
     @get:Input
-    abstract val sentryDsn: Property<String>
-
-    @get:Input
-    abstract val sentryEnvironment: Property<String>
-
-    @get:Input
     abstract val clientRole: Property<String>
 
     @TaskAction
@@ -64,19 +58,8 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
             )
         }
 
-        outDir.resolve("com/nuvio/app/core/diagnostics").apply {
-            mkdirs()
-            resolve("SentryConfig.kt").writeText(
-                """
-                |package com.nuvio.app.core.diagnostics
-                |
-                |object SentryConfig {
-                |    const val DSN = "${sentryDsn.get()}"
-                |    const val ENVIRONMENT = "${sentryEnvironment.get()}"
-                |}
-                """.trimMargin()
-            )
-        }
+        outDir.resolve("com/nuvio/app/core/diagnostics/SentryConfig.kt").delete()
+        outDir.resolve("com/nuvio/app/core/diagnostics/PostHogConfig.kt").delete()
 
         outDir.resolve("com/nuvio/app/features/tmdb/TmdbConfig.kt").delete()
 
@@ -309,15 +292,7 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL", "https://api.stream.khayin.net"))
     supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg3MjIwNTM2LCJleHAiOjE5NDQ5MDA1MzZ9.BpzwMmPVhF3RjDBMgnsKXRqn-3TI-c3QGeRB6-4vs6M"))
     supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL", "https://api.stream.khayin.net"))
-    sentryDsn.set(runtimeConfigValue("SENTRY_DSN", "https://03b275d4c26ccf95402bcd0a9a9f9b7f@o4511970100641792.ingest.us.sentry.io/4511970104705024"))
     clientRole.set(runtimeConfigValue("NUVIO_CLIENT_ROLE", (findProperty("nuvio.client.role") as? String) ?: "user"))
-    sentryEnvironment.set(
-        when {
-            requestedGradleTasks.any { "benchmark" in it } -> "benchmark"
-            requestedGradleTasks.any { "debug" in it } -> "debug"
-            else -> "production"
-        }
-    )
 }
 
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
@@ -431,7 +406,6 @@ kotlin {
                 implementation("com.google.code.gson:gson:2.11.0")
                 implementation("io.github.peerless2012:ass-media:0.4.0-beta01")
                 implementation(libs.ktor.client.okhttp)
-                implementation(libs.sentry.android)
                 implementation(libs.androidx.media3.exoplayer.hls)
                 implementation(libs.androidx.media3.exoplayer.dash)
                 implementation(libs.androidx.media3.exoplayer.smoothstreaming)

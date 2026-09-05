@@ -119,7 +119,7 @@ private fun buildAddonHttpClient(cache: Cache? = null): OkHttpClient =
         .writeTimeout(60, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
-        .addInterceptor(SentryNetworkBreadcrumbInterceptor())
+        .addInterceptor(PostHogNetworkLogInterceptor())
         .proxy(Proxy.NO_PROXY)
         .apply {
             if (cache != null) {
