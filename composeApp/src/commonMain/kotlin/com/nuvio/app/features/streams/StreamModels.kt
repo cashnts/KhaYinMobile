@@ -91,31 +91,54 @@ data class StreamItem(
     val isUncachedStream: Boolean
         get() {
             if (debridCacheStatus?.state == StreamDebridCacheState.NOT_CACHED) return true
-            val checkTexts = listOfNotNull(name, streamLabel, title, description, url, behaviorHints.filename)
+            val checkTexts = listOfNotNull(name, title, description, url, behaviorHints.filename)
             return checkTexts.any { text ->
                 text.contains("uncached", ignoreCase = true) ||
                 text.contains("not cached", ignoreCase = true) ||
                 text.contains("not_cached", ignoreCase = true) ||
                 text.contains("non-cached", ignoreCase = true) ||
+                text.contains("non cached", ignoreCase = true) ||
                 text.contains("torrent_not_downloaded", ignoreCase = true) ||
                 text.contains("not_downloaded", ignoreCase = true) ||
                 text.contains("not downloaded", ignoreCase = true) ||
+                text.contains("caching_in_progress", ignoreCase = true) ||
+                text.contains("caching in progress", ignoreCase = true) ||
+                text.contains("cache in progress", ignoreCase = true) ||
+                text.contains("download_in_progress", ignoreCase = true) ||
                 text.contains("[download]", ignoreCase = true) ||
                 text.contains("(download)", ignoreCase = true) ||
                 text.contains("downloading", ignoreCase = true) ||
                 text.contains("[dl]", ignoreCase = true) ||
                 text.contains("⏳") ||
                 text.contains("❌") ||
-                text.contains("caching in progress", ignoreCase = true) ||
                 text.contains("media caching", ignoreCase = true) ||
                 text.contains("[rd download]", ignoreCase = true) ||
                 text.contains("[ad download]", ignoreCase = true) ||
                 text.contains("[pm download]", ignoreCase = true) ||
                 text.contains("[tb download]", ignoreCase = true) ||
+                text.contains("[dl download]", ignoreCase = true) ||
+                text.contains("[debrid-link download]", ignoreCase = true) ||
                 text.contains("[torbox download]", ignoreCase = true) ||
+                text.contains("[seedr download]", ignoreCase = true) ||
+                text.contains("[offcloud download]", ignoreCase = true) ||
+                text.contains("[easydebrid download]", ignoreCase = true) ||
+                text.contains("[pikpak download]", ignoreCase = true) ||
+                text.contains("[rd (download)]", ignoreCase = true) ||
+                text.contains("[ad (download)]", ignoreCase = true) ||
+                text.contains("[tb (download)]", ignoreCase = true) ||
+                text.contains("[pm (download)]", ignoreCase = true) ||
+                text.contains("[dl (download)]", ignoreCase = true) ||
                 text.contains("[rd -]", ignoreCase = true) ||
+                text.contains("[ad -]", ignoreCase = true) ||
+                text.contains("[tb -]", ignoreCase = true) ||
+                text.contains("[pm -]", ignoreCase = true) ||
+                text.contains("[dl -]", ignoreCase = true) ||
                 text.contains("[rd ⏳]", ignoreCase = true) ||
-                Regex("""(?i)\[(?:rd|ad|pm|tb|torbox)\](?!\+)""").containsMatchIn(text)
+                text.contains("[ad ⏳]", ignoreCase = true) ||
+                text.contains("[tb ⏳]", ignoreCase = true) ||
+                text.contains("[pm ⏳]", ignoreCase = true) ||
+                text.contains("[dl ⏳]", ignoreCase = true) ||
+                Regex("""(?i)\[(?:rd|ad|pm|tb|torbox|dl|debrid|debrid-link|seedr|offcloud|easydebrid|pikpak)\](?!\+)""").containsMatchIn(text)
             }
         }
 
@@ -123,12 +146,23 @@ data class StreamItem(
         get() {
             if (isUncachedStream) return false
             if (isDirectDebridStream || isCachedDebridTorrentStream) return true
-            val checkTexts = listOfNotNull(name, streamLabel, title, description)
+            val checkTexts = listOfNotNull(name, title, description)
             return checkTexts.any { text ->
                 text.contains("[rd+]", ignoreCase = true) ||
+                text.contains("[rd +]", ignoreCase = true) ||
                 text.contains("[ad+]", ignoreCase = true) ||
+                text.contains("[ad +]", ignoreCase = true) ||
                 text.contains("[pm+]", ignoreCase = true) ||
+                text.contains("[pm +]", ignoreCase = true) ||
                 text.contains("[tb+]", ignoreCase = true) ||
+                text.contains("[tb +]", ignoreCase = true) ||
+                text.contains("[dl+]", ignoreCase = true) ||
+                text.contains("[dl +]", ignoreCase = true) ||
+                text.contains("[debrid-link+]", ignoreCase = true) ||
+                text.contains("[seedr+]", ignoreCase = true) ||
+                text.contains("[offcloud+]", ignoreCase = true) ||
+                text.contains("[easydebrid+]", ignoreCase = true) ||
+                text.contains("[pikpak+]", ignoreCase = true) ||
                 text.contains("[torbox+]", ignoreCase = true) ||
                 text.contains("[debrid+]", ignoreCase = true) ||
                 text.contains("[realdebrid+]", ignoreCase = true) ||
@@ -136,9 +170,10 @@ data class StreamItem(
                 text.contains("[premiumize+]", ignoreCase = true) ||
                 text.contains("[cached]", ignoreCase = true) ||
                 text.contains("(cached)", ignoreCase = true) ||
-                text.contains("[ready]", ignoreCase = true) ||
                 text.contains("⚡") ||
-                text.contains("instant", ignoreCase = true)
+                text.contains("instant", ignoreCase = true) ||
+                text.contains("[ready]", ignoreCase = true) ||
+                text.contains("(ready)", ignoreCase = true)
             }
         }
 
