@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import com.nuvio.app.features.p2p.P2pStreamingState
@@ -23,6 +24,13 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val isInPip = rememberIsInPictureInPicture()
     val displayedPositionMs = scrubbingPositionMs ?: playbackSnapshot.positionMs
     val isEpisode = activeSeasonNumber != null && activeEpisodeNumber != null
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            com.nuvio.app.features.subtitles.jit.SubtitleJitManager.stopSession()
+        }
+    }
+
     val currentGestureFeedback = liveGestureFeedback ?: gestureFeedback
     val isP2pPlaybackActive = activeTorrentInfoHash != null
     val p2pConnecting = p2pStreamingState as? P2pStreamingState.Connecting
@@ -137,7 +145,27 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 commitHorizontalSeekState = gestureCallbacks.commitHorizontalSeek,
             ),
     ) {
-        val playerSurfaceSourceUrl = if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
+        LaunchedEffect(isPrerollActive, prerollSkippableAfter) {
+            if (isPrerollActive) {
+                com.nuvio.app.core.analytics.PostHogAnalytics.trackAdStarted(
+                    adId = prerollId,
+                    adTitle = prerollTitle,
+                    adUrl = prerollUrl,
+                    durationSeconds = prerollDuration,
+                    skippableAfter = prerollSkippableAfter,
+                    mediaTitle = title,
+                    videoId = activeVideoId
+                )
+                val skippableSec = prerollSkippableAfter.coerceAtLeast(0)
+                canSkipPreroll = skippableSec == 0
+                if (skippableSec > 0) {
+                    kotlinx.coroutines.delay(skippableSec * 1000L)
+                    canSkipPreroll = true
+                }
+            }
+        }
+
+        val playerSurfaceSourceUrl = if (isPrerollActive) prerollUrl else if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
         val initialPositionRequestKey = currentInitialPositionRequestKey()
         if (playerSurfaceSourceUrl != null) {
             PlatformPlayerSurface(
@@ -164,12 +192,46 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 onSnapshot = { snapshot ->
                     playbackSnapshot = snapshot
                     if (!snapshot.isLoading) initialLoadCompleted = true
+                    if (!isPrerollActive) {
+                        com.nuvio.app.features.subtitles.jit.SubtitleJitManager.updatePlaybackProgress(
+                            currentTimeSec = snapshot.positionMs / 1000.0,
+                            isPlaying = snapshot.isPlaying,
+                            durationSec = snapshot.durationMs / 1000.0
+                        )
+                    }
                     if (snapshot.isEnded) {
-                        shouldPlay = false
-                        controlsVisible = !playerControlsLocked
+                        if (isPrerollActive) {
+                            if (snapshot.positionMs > 1000L || (snapshot.durationMs > 0L && snapshot.positionMs >= snapshot.durationMs - 2000L)) {
+                                com.nuvio.app.core.analytics.PostHogAnalytics.trackAdCompleted(
+                                    adId = prerollId,
+                                    adTitle = prerollTitle,
+                                    adUrl = prerollUrl,
+                                    durationSeconds = prerollDuration,
+                                    mediaTitle = title,
+                                    videoId = activeVideoId
+                                )
+                                finishPreroll()
+                            }
+                        } else {
+                            shouldPlay = false
+                            controlsVisible = !playerControlsLocked
+                        }
                     }
                 },
                 onError = { message ->
+                    if (isPrerollActive) {
+                        co.touchlab.kermit.Logger.withTag("PlayerScreen").w { "Preroll playback error: $message; skipping to main content" }
+                        com.nuvio.app.core.analytics.PostHogAnalytics.trackAdFailed(
+                            adId = prerollId,
+                            adTitle = prerollTitle,
+                            adUrl = prerollUrl,
+                            errorMessage = message ?: "Unknown error",
+                            mediaTitle = title,
+                            videoId = activeVideoId
+                        )
+                        finishPreroll()
+                        return@PlatformPlayerSurface
+                    }
                     if (message != null && tryRefreshCredentialedSourceAfterError(message)) {
                         return@PlatformPlayerSurface
                     }
@@ -256,6 +318,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             resizeMode = resizeMode,
             isLocked = playerControlsLocked,
             showPlaybackControls = controlsVisible,
+            isPrerollActive = isPrerollActive,
             onLockToggle = {
                 if (playerControlsLocked) unlockPlayerControls() else lockPlayerControls()
             },
@@ -264,8 +327,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                 args.onBack()
             },
             onTogglePlayback = { togglePlayback() },
-            onSeekBack = { seekBy(-10_000L) },
-            onSeekForward = { seekBy(10_000L) },
+            onSeekBack = { if (!isPrerollActive) seekBy(-10_000L) },
+            onSeekForward = { if (!isPrerollActive) seekBy(10_000L) },
             onResizeModeClick = { cycleResizeMode() },
             onSpeedClick = { cyclePlaybackSpeed() },
             onSubtitleClick = {
@@ -332,14 +395,18 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             showParentalGuide = showParentalGuide,
             onParentalGuideAnimationComplete = { showParentalGuide = false },
             onScrubChange = { positionMs ->
-                isScrubbingTimeline = true
-                scrubbingPositionMs = positionMs
+                if (!isPrerollActive) {
+                    isScrubbingTimeline = true
+                    scrubbingPositionMs = positionMs
+                }
             },
             onScrubFinished = { positionMs ->
-                isScrubbingTimeline = false
-                scrubbingPositionMs = null
-                playerController?.seekTo(positionMs)
-                scheduleProgressSyncAfterSeek()
+                if (!isPrerollActive) {
+                    isScrubbingTimeline = false
+                    scrubbingPositionMs = null
+                    playerController?.seekTo(positionMs)
+                    scheduleProgressSyncAfterSeek()
+                }
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
@@ -422,6 +489,31 @@ private fun BoxScope.RenderPlaybackOverlays(
                 flushWatchProgress()
                 args.onBack()
             },
+        )
+
+        PrerollNoticeOverlay(
+            visible = isPrerollActive,
+            title = prerollTitle,
+            notice = "Spotlight • Movie starts shortly",
+            canSkip = canSkipPreroll,
+            skippableAfter = prerollSkippableAfter,
+            onSkip = {
+                com.nuvio.app.core.analytics.PostHogAnalytics.trackAdSkipped(
+                    adId = prerollId,
+                    adTitle = prerollTitle,
+                    adUrl = prerollUrl,
+                    timeWatchedMs = playbackSnapshot.positionMs,
+                    durationSeconds = prerollDuration,
+                    mediaTitle = title,
+                    videoId = activeVideoId
+                )
+                finishPreroll()
+            },
+            onBack = {
+                flushWatchProgress()
+                args.onBack()
+            },
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

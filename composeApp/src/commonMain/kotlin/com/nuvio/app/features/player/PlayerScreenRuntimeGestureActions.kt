@@ -99,6 +99,7 @@ internal fun PlayerScreenRuntime.showSeekFeedback(direction: PlayerSeekDirection
 }
 
 internal fun PlayerScreenRuntime.showHorizontalSeekPreview(previewPositionMs: Long, baselinePositionMs: Long) {
+    if (isPrerollActive) return
     val deltaMs = previewPositionMs - baselinePositionMs
     val direction = if (deltaMs < 0L) PlayerSeekDirection.Backward else PlayerSeekDirection.Forward
     liveGestureFeedback = GestureFeedbackState(
@@ -164,6 +165,7 @@ internal fun PlayerScreenRuntime.togglePlayback() {
 }
 
 internal fun PlayerScreenRuntime.seekBy(offsetMs: Long) {
+    if (isPrerollActive) return
     playerController?.seekBy(offsetMs)
     scheduleProgressSyncAfterSeek()
     controlsVisible = true
@@ -174,6 +176,7 @@ internal fun PlayerScreenRuntime.seekBy(offsetMs: Long) {
 }
 
 internal fun PlayerScreenRuntime.handleDoubleTapSeek(direction: PlayerSeekDirection) {
+    if (isPrerollActive) return
     val currentPositionMs = playbackSnapshot.positionMs.coerceAtLeast(0L)
     val currentSeekState = accumulatedSeekState
     val nextState = if (currentSeekState?.direction == direction) {
@@ -233,6 +236,7 @@ internal fun PlayerScreenRuntime.cyclePlaybackSpeed() {
 }
 
 internal fun PlayerScreenRuntime.activateHoldToSpeed() {
+    if (isPrerollActive) return
     if (!playerSettingsUiState.holdToSpeedEnabled) return
     val controller = playerController ?: return
     if (speedBoostRestoreSpeed != null) return
@@ -279,6 +283,10 @@ internal fun PlayerScreenRuntime.rememberSurfaceGestureCallbacks(): PlayerSurfac
             revealLockedOverlay()
             return@rememberUpdatedState
         }
+        if (isPrerollActive) {
+            controlsVisible = !controlsVisible
+            return@rememberUpdatedState
+        }
         if (!playerSettingsUiState.touchGesturesEnabled) {
             controlsVisible = !controlsVisible
             return@rememberUpdatedState
@@ -309,6 +317,7 @@ internal fun PlayerScreenRuntime.rememberSurfaceGestureCallbacks(): PlayerSurfac
         currentPositionMs = rememberUpdatedState(playbackSnapshot.positionMs.coerceAtLeast(0L)),
         currentDurationMs = rememberUpdatedState(playbackSnapshot.durationMs),
         commitHorizontalSeek = rememberUpdatedState { targetPositionMs: Long ->
+            if (isPrerollActive) return@rememberUpdatedState
             playerController?.seekTo(targetPositionMs)
             scheduleProgressSyncAfterSeek()
         },

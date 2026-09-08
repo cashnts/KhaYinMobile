@@ -47,4 +47,11 @@ actual object LicenseStorage {
     actual fun saveDismissedBroadcastTimestamp(timestamp: Long) {
         preferences?.edit()?.putLong(dismissedBroadcastKey, timestamp)?.apply()
     }
+
+    actual fun isFreeMode(): Boolean =
+        preferences?.getBoolean("is_free_mode", false) ?: false
+
+    actual fun saveFreeMode(isFree: Boolean) {
+        preferences?.edit()?.putBoolean("is_free_mode", isFree)?.apply()
+    }
 }

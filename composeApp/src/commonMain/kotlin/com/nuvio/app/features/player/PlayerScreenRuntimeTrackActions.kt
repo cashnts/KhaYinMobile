@@ -43,6 +43,7 @@ internal fun PlayerScreenRuntime.persistAudioPreference(track: AudioTrack?) {
 }
 
 internal fun PlayerScreenRuntime.persistInternalSubtitlePreference(track: SubtitleTrack?) {
+    com.nuvio.app.features.subtitles.jit.SubtitleJitManager.stopSession()
     updateTrackPreference { current ->
         current.copy(
             subtitleType = if (track == null) {
@@ -61,6 +62,7 @@ internal fun PlayerScreenRuntime.persistInternalSubtitlePreference(track: Subtit
 }
 
 internal fun PlayerScreenRuntime.persistAddonSubtitlePreference(subtitle: AddonSubtitle) {
+    attachJitSubtitleIfNeeded(subtitle.url, subtitle.addonName)
     updateTrackPreference { current ->
         current.copy(
             subtitleType = PersistedSubtitleSelectionType.ADDON,
@@ -128,6 +130,7 @@ internal fun PlayerScreenRuntime.restorePersistedTrackPreferenceIfNeeded() {
                 useCustomSubtitles = true
                 playerController?.setSubtitleUri(url)
                 preferredSubtitleSelectionApplied = true
+                attachJitSubtitleIfNeeded(url, preference.addonSubtitleAddonName)
             }
         }
     }
@@ -240,4 +243,24 @@ private fun PlayerScreenRuntime.disableAutomaticSubtitleSelection() {
     selectedSubtitleIndex = -1
     selectedAddonSubtitleId = null
     useCustomSubtitles = false
+    com.nuvio.app.features.subtitles.jit.SubtitleJitManager.stopSession()
+}
+
+internal fun PlayerScreenRuntime.attachJitSubtitleIfNeeded(url: String, addonName: String?) {
+    if (com.nuvio.app.features.subtitles.jit.SubtitleJitManager.isJitSubtitle(url, addonName)) {
+        val mediaType = if (isSeries) "series" else "movie"
+        val mediaId = (parentMetaId?.takeIf { it.isNotBlank() } ?: activeVideoId)?.ifBlank { "anonymous" } ?: "anonymous"
+        com.nuvio.app.features.subtitles.jit.SubtitleJitManager.startSession(
+            mediaId = mediaId,
+            type = mediaType,
+            subtitleUrl = url,
+            onNewCuesAvailable = { updatedUrl ->
+                val now = com.nuvio.app.features.watched.WatchedClock.nowEpochMs()
+                val cacheBustedUrl = if (updatedUrl.contains("?")) "$updatedUrl&_jit_t=$now" else "$updatedUrl?_jit_t=$now"
+                playerController?.setSubtitleUri(cacheBustedUrl)
+            }
+        )
+    } else {
+        com.nuvio.app.features.subtitles.jit.SubtitleJitManager.stopSession()
+    }
 }

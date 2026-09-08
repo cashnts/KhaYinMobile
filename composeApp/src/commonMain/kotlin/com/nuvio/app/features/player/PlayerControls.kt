@@ -105,6 +105,7 @@ internal fun PlayerControlsShell(
     onScrubChange: (Long) -> Unit,
     onScrubFinished: (Long) -> Unit,
     horizontalSafePadding: androidx.compose.ui.unit.Dp,
+    isPrerollActive: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -179,13 +180,14 @@ internal fun PlayerControlsShell(
                     onSeekBack = onSeekBack,
                     onSeekForward = onSeekForward,
                     onTogglePlayback = onTogglePlayback,
+                    isPrerollActive = isPrerollActive,
                     modifier = Modifier
                         .align(Alignment.Center)
                         .padding(bottom = metrics.centerLift),
                 )
             }
 
-            if (showPlaybackControls) {
+            if (showPlaybackControls && !isPrerollActive) {
                 ProgressControls(
                     playbackSnapshot = playbackSnapshot,
                     displayedPositionMs = displayedPositionMs,
@@ -201,6 +203,7 @@ internal fun PlayerControlsShell(
                     activeResolutionLabel = activeResolutionLabel,
                     onSourcesClick = onSourcesClick,
                     onEpisodesClick = onEpisodesClick,
+                    isPrerollActive = isPrerollActive,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -413,6 +416,7 @@ private fun CenterControls(
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onTogglePlayback: () -> Unit,
+    isPrerollActive: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -420,24 +424,28 @@ private fun CenterControls(
         horizontalArrangement = Arrangement.spacedBy(metrics.centerGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SideControlButton(
-            icon = Icons.Rounded.Replay10,
-            contentDescription = stringResource(Res.string.compose_player_seek_back_10),
-            metrics = metrics,
-            onClick = onSeekBack,
-        )
+        if (!isPrerollActive) {
+            SideControlButton(
+                icon = Icons.Rounded.Replay10,
+                contentDescription = stringResource(Res.string.compose_player_seek_back_10),
+                metrics = metrics,
+                onClick = onSeekBack,
+            )
+        }
         PlayPauseControlButton(
             isPlaying = snapshot.isPlaying,
             isBuffering = snapshot.isLoading,
             metrics = metrics,
             onClick = onTogglePlayback,
         )
-        SideControlButton(
-            icon = Icons.Rounded.Forward10,
-            contentDescription = stringResource(Res.string.compose_player_seek_forward_10),
-            metrics = metrics,
-            onClick = onSeekForward,
-        )
+        if (!isPrerollActive) {
+            SideControlButton(
+                icon = Icons.Rounded.Forward10,
+                contentDescription = stringResource(Res.string.compose_player_seek_forward_10),
+                metrics = metrics,
+                onClick = onSeekForward,
+            )
+        }
     }
 }
 
@@ -537,6 +545,7 @@ private fun ProgressControls(
     activeResolutionLabel: String? = null,
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
+    isPrerollActive: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val durationMs = playbackSnapshot.durationMs.coerceAtLeast(1L)
@@ -545,26 +554,28 @@ private fun ProgressControls(
     val audioPainter = appIconPainter(AppIconResource.PlayerAudioFilled)
 
     Column(modifier = modifier) {
-        Slider(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(metrics.sliderTouchHeight)
-                .graphicsLayer(scaleY = metrics.sliderScaleY),
-            value = displayedPositionMs.coerceIn(0L, durationMs).toFloat(),
-            onValueChange = { value -> onScrubChange(value.toLong()) },
-            onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, durationMs)) },
-            valueRange = 0f..durationMs.toFloat(),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .padding(top = 4.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TimePill(text = formatPlaybackTime(displayedPositionMs), fontSize = metrics.timeSize)
-            TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize)
+        if (!isPrerollActive) {
+            Slider(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(metrics.sliderTouchHeight)
+                    .graphicsLayer(scaleY = metrics.sliderScaleY),
+                value = displayedPositionMs.coerceIn(0L, durationMs).toFloat(),
+                onValueChange = { value -> onScrubChange(value.toLong()) },
+                onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, durationMs)) },
+                valueRange = 0f..durationMs.toFloat(),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .padding(top = 4.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TimePill(text = formatPlaybackTime(displayedPositionMs), fontSize = metrics.timeSize)
+                TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize)
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

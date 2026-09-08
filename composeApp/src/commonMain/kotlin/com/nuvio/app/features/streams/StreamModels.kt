@@ -11,7 +11,16 @@ data class StreamSubtitle(
     val url: String,
     val language: String,
     val name: String? = null,
-    val headers: Map<String, String>? = null
+    val headers: Map<String, String>? = null,
+)
+
+@Serializable
+data class StreamPreroll(
+    val url: String,
+    val duration: Int = 15,
+    val title: String? = "KhaYin Spotlight",
+    val skippableAfter: Int = 5,
+    val id: String? = null,
 )
 
 data class StreamItem(
@@ -33,7 +42,20 @@ data class StreamItem(
     val debridCacheStatus: StreamDebridCacheStatus? = null,
     val externalSubtitles: List<StreamSubtitle> = emptyList(),
     val badges: List<StreamBadge> = emptyList(),
+    val preroll: StreamPreroll? = null,
 ) {
+    val resolvedPrerollUrl: String?
+        get() = preroll?.url?.takeIf { it.isNotBlank() } ?: behaviorHints.prerollUrl?.takeIf { it.isNotBlank() }
+
+    val resolvedPrerollDuration: Int
+        get() = preroll?.duration ?: behaviorHints.prerollDuration ?: 15
+
+    val resolvedPrerollTitle: String
+        get() = preroll?.title?.takeIf { it.isNotBlank() } ?: behaviorHints.prerollTitle?.takeIf { it.isNotBlank() } ?: "KhaYin Spotlight"
+
+    val resolvedPrerollSkippableAfter: Int
+        get() = preroll?.skippableAfter ?: behaviorHints.prerollSkippableAfter ?: 5
+
     val streamLabel: String
         get() = name ?: runCatching { runBlocking { getString(Res.string.stream_default_name) } }.getOrDefault("Stream")
 
@@ -299,6 +321,10 @@ data class StreamBehaviorHints(
     val videoSize: Long? = null,
     val filename: String? = null,
     val proxyHeaders: StreamProxyHeaders? = null,
+    val prerollUrl: String? = null,
+    val prerollDuration: Int? = null,
+    val prerollTitle: String? = null,
+    val prerollSkippableAfter: Int? = null,
 )
 
 data class StreamProxyHeaders(
