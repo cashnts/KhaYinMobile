@@ -52,6 +52,30 @@ object AddonRepository {
     private val _uiState = MutableStateFlow(AddonsUiState())
     val uiState: StateFlow<AddonsUiState> = _uiState.asStateFlow()
 
+    const val DEFAULT_CINEMETA_ADDON_URL = "https://v3-cinemeta.strem.io/manifest.json"
+    const val DEFAULT_NUVIO_CATALOG_ADDON_URL = "https://catalog.nuvio.tv/manifest.json"
+    const val DEFAULT_KHAYIN_STREAM_ADDON_URL = "https://stream.khayin.net/manifest.json"
+    const val DEFAULT_OPENSUBTITLES_ADDON_URL = "https://opensubtitles-v3.strem.io/manifest.json"
+    const val DEFAULT_SPORTS_ADDON_URL = "https://premium.highfly.dev/fd47b1a7-5d08-4e24-ae97-9e9fe91d6321/eyJpbmNsdWRlU3BvcnRzIjpbImZvb3RiYWxsIiwiYmFza2V0YmFsbCIsIm1vdG9yLXNwb3J0cyJdLCJoaWRlVGl0bGVzIjp0cnVlLCJoaWRlRGVzY3JpcHRpb25zIjp0cnVlLCJ0aW1lem9uZSI6Ik1NVCIsInNvcnRTdHJlYW1zIjoicXVhbGl0eS1oaWdoIiwibmFtZVRwbCI6IntzdHJlYW0uY2hhbm5lbE5hbWV9IHwge3N0cmVhbS5jYXRlZ29yeX0ifQ/manifest.json"
+
+    /** Locked addons that cannot be removed or disabled by the user. */
+    val LOCKED_ADDON_URLS = setOf(
+        DEFAULT_CINEMETA_ADDON_URL,
+        DEFAULT_NUVIO_CATALOG_ADDON_URL,
+        DEFAULT_KHAYIN_STREAM_ADDON_URL,
+        DEFAULT_OPENSUBTITLES_ADDON_URL,
+        DEFAULT_SPORTS_ADDON_URL,
+    )
+
+    /** For UI: permanent built-in addons. */
+    val DEFAULT_BUILTIN_ADDONS = listOf(
+        DEFAULT_CINEMETA_ADDON_URL,
+        DEFAULT_NUVIO_CATALOG_ADDON_URL,
+        DEFAULT_KHAYIN_STREAM_ADDON_URL,
+        DEFAULT_OPENSUBTITLES_ADDON_URL,
+        DEFAULT_SPORTS_ADDON_URL,
+    )
+
     private var initialized = false
     private var pulledFromServer = false
     private var currentProfileId: Int = 1
@@ -64,22 +88,34 @@ object AddonRepository {
         currentProfileId = effectiveProfileId
         log.d { "initialize() — loading local addons for profile $currentProfileId" }
 
+        // Bootstrap locked built-in addons into local storage on first run.
         val storedUrls = dedupeManifestUrls(AddonStorage.loadInstalledAddonUrls(currentProfileId))
+        val storedSet = storedUrls.toSet()
+        val missing = LOCKED_ADDON_URLS.filter { it !in storedSet }
+        val bootstrappedUrls = if (missing.isNotEmpty()) {
+            val merged = (storedUrls + missing).distinct()
+            AddonStorage.saveInstalledAddonUrls(currentProfileId, merged)
+            log.d { "initialize() — bootstrapped ${missing.size} locked addon(s)" }
+            merged
+        } else {
+            storedUrls
+        }
+
         val enabledByUrl = loadLocalEnabledStates()
-        log.d { "initialize() — local addon count: ${storedUrls.size}" }
-        if (storedUrls.isEmpty()) return
+        log.d { "initialize() — local addon count: ${bootstrappedUrls.size}" }
+        if (bootstrappedUrls.isEmpty()) return
 
         val existingByUrl = _uiState.value.addons.associateBy(ManagedAddon::manifestUrl)
         _uiState.value = AddonsUiState(
-            addons = storedUrls.map { manifestUrl ->
+            addons = bootstrappedUrls.map { manifestUrl ->
                 existingByUrl[manifestUrl].toPendingAddon(
                     manifestUrl = manifestUrl,
-                    enabled = enabledByUrl[manifestUrl],
+                    enabled = if (manifestUrl in LOCKED_ADDON_URLS) true else (enabledByUrl[manifestUrl] ?: true),
                 )
             },
         )
 
-        storedUrls.forEach { manifestUrl ->
+        bootstrappedUrls.forEach { manifestUrl ->
             val existing = existingByUrl[manifestUrl]
             val addon = _uiState.value.addons.firstOrNull { it.manifestUrl == manifestUrl }
             if (addon?.enabled == true && (existing == null || (addon.manifest == null && !addon.isRefreshing))) {
@@ -119,6 +155,22 @@ object AddonRepository {
                 .decodeList<AddonRow>()
 
             val rowsByUrl = linkedMapOf<String, AddonRow>()
+            // Always ensure locked built-in addons are present
+            LOCKED_ADDON_URLS.forEachIndexed { index, lockedUrl ->
+                rowsByUrl[lockedUrl] = AddonRow(
+                    url = lockedUrl,
+                    name = when (lockedUrl) {
+                        DEFAULT_OPENSUBTITLES_ADDON_URL -> "KhaYin Subtitle"
+                        DEFAULT_KHAYIN_STREAM_ADDON_URL -> "KhaYin Streams"
+                        DEFAULT_CINEMETA_ADDON_URL -> "Cinemeta"
+                        DEFAULT_NUVIO_CATALOG_ADDON_URL -> "Nuvio Catalogs"
+                        DEFAULT_SPORTS_ADDON_URL -> "Sports"
+                        else -> ""
+                    },
+                    enabled = true,
+                    sortOrder = index,
+                )
+            }
             rows.forEach { row ->
                 val manifestUrl = ensureManifestSuffix(row.url)
                 if (!rowsByUrl.containsKey(manifestUrl)) {
@@ -158,6 +210,36 @@ object AddonRepository {
                     SupabaseProvider.client.postgrest.rpc("sync_push_addons", params)
                     log.i { "pullFromServer() — migration push done (${addons.size} addons)" }
                     return
+                } else {
+                    // Truly brand-new user: seed from server presetAddons config
+                    val presetUrls = com.nuvio.app.features.license.AdminControlRepository.config.value.presetAddons
+                    log.i { "pullFromServer() — new user bootstrap from server config: ${presetUrls.size} preset(s)" }
+                    val seedUrls = (LOCKED_ADDON_URLS.toList() + presetUrls.map { ensureManifestSuffix(it.trim()) })
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                    if (seedUrls.isNotEmpty()) {
+                        val enabledByUrl = loadLocalEnabledStates()
+                        val seedAddons = seedUrls.mapIndexed { index, manifestUrl ->
+                            AddonPushItem(
+                                url = manifestUrl,
+                                name = "",
+                                enabled = if (manifestUrl in LOCKED_ADDON_URLS) true else (enabledByUrl[manifestUrl] ?: true),
+                                sortOrder = index,
+                            )
+                        }
+                        val seedParams = buildJsonObject {
+                            put("p_profile_id", currentProfileId)
+                            put("p_addons", json.encodeToJsonElement(seedAddons))
+                            putSyncOriginClientId()
+                        }
+                        SupabaseProvider.client.postgrest.rpc("sync_push_addons", seedParams)
+                        AddonStorage.saveInstalledAddonUrls(currentProfileId, seedUrls)
+                        log.i { "pullFromServer() — new user seeded with ${seedUrls.size} addon(s)" }
+                        // Re-invoke so the newly pushed rows are loaded normally
+                        pulledFromServer = false
+                        pullFromServer(currentProfileId)
+                        return
+                    }
                 }
             }
 
@@ -276,9 +358,11 @@ object AddonRepository {
         if (presetUrls.isEmpty() && disabledAddons.isEmpty()) return
         log.d { "syncRemotePresetAddons() — presetCount=${presetUrls.size}, disabledCount=${disabledAddons.size}" }
 
-        // 1. Remove any currently installed addons that are on the blacklist
+        // 1. Remove any currently installed addons that are on the blacklist.
+        //    Locked built-in addons (e.g. sports) are immune to the remote blacklist.
         if (disabledAddons.isNotEmpty()) {
             val toRemove = _uiState.value.addons.filter { addon ->
+                addon.manifestUrl !in LOCKED_ADDON_URLS &&
                 disabledAddons.any { disabled ->
                     val d = disabled.trim().lowercase()
                     val norm = addon.manifestUrl.trim().lowercase()
@@ -311,6 +395,10 @@ object AddonRepository {
 
     fun removeAddon(manifestUrl: String) {
         if (isUsingPrimaryAddonsFromSecondaryProfile()) return
+        if (manifestUrl in LOCKED_ADDON_URLS) {
+            log.w { "removeAddon() — blocked: $manifestUrl is a locked built-in" }
+            return
+        }
         log.i { "removeAddon() — $manifestUrl" }
         _uiState.update { current ->
             current.copy(
@@ -345,15 +433,16 @@ object AddonRepository {
 
     fun setAddonEnabled(manifestUrl: String, enabled: Boolean) {
         if (isUsingPrimaryAddonsFromSecondaryProfile()) return
+        val targetEnabled = if (manifestUrl in LOCKED_ADDON_URLS) true else enabled
         var shouldRefresh = false
         _uiState.update { current ->
             current.copy(
                 addons = current.addons.map { addon ->
-                    if (addon.manifestUrl != manifestUrl || addon.enabled == enabled) {
+                    if (addon.manifestUrl != manifestUrl || addon.enabled == targetEnabled) {
                         addon
                     } else {
-                        shouldRefresh = enabled && addon.manifest == null && !addon.isRefreshing
-                        addon.copy(enabled = enabled)
+                        shouldRefresh = targetEnabled && addon.manifest == null && !addon.isRefreshing
+                        addon.copy(enabled = targetEnabled)
                     }
                 },
             )

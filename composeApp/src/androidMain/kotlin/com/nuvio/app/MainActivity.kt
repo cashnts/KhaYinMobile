@@ -88,6 +88,7 @@ open class MainActivity : AppCompatActivity() {
         AddonStorage.initialize(applicationContext)
         AuthStorage.initialize(applicationContext)
         com.nuvio.app.features.license.LicenseStorage.initialize(applicationContext)
+        com.nuvio.app.features.updater.PlatformAppUpdater.initializeWithContext(applicationContext)
         ServerConfigurationStorage.initialize(applicationContext)
         LibraryStorage.initialize(applicationContext)
         WatchedStorage.initialize(applicationContext)

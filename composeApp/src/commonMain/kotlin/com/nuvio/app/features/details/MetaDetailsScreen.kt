@@ -1998,10 +1998,29 @@ private fun ConfiguredMetaSections(
 
     @Composable
     fun RenderSection(key: MetaScreenSectionKey, showHeader: Boolean = true) {
+        val isSportsItem = com.nuvio.app.features.details.LiveMediaCleaner.isSportsItem(
+            type = meta.type,
+            title = meta.name,
+            genres = meta.genres,
+            description = meta.description,
+        )
+        val isSportsLocked = isSportsItem && !com.nuvio.app.features.license.LicenseRepository.isPlusMember
+        var showSportsLockedDialog by remember { mutableStateOf(false) }
+
+        if (showSportsLockedDialog) {
+            com.nuvio.app.features.license.SportsPlusLockedDialog(
+                onDismiss = { showSportsLockedDialog = false },
+            )
+        }
+
         when (key) {
             MetaScreenSectionKey.ACTIONS -> {
+                val effectivePlayLabel = if (isSportsLocked) stringResource(Res.string.sports_plus_upgrade_button) else playButtonLabel
+                val effectivePlayClick: () -> Unit = if (isSportsLocked) { { showSportsLockedDialog = true } } else onPrimaryPlayClick
+
                 DetailActionButtons(
-                    playLabel = playButtonLabel,
+                    playLabel = effectivePlayLabel,
+                    isLocked = isSportsLocked,
                     secondaryActions = buildList {
                         add(DetailSecondaryAction(
                             label = if (isWatched) {
@@ -2034,8 +2053,8 @@ private fun ConfiguredMetaSections(
                         ))
                     },
                     isTablet = isTablet,
-                    onPlayClick = onPrimaryPlayClick,
-                    onPlayLongClick = if (showManualPlayOption) onPrimaryPlayLongClick else null,
+                    onPlayClick = effectivePlayClick,
+                    onPlayLongClick = if (isSportsLocked) null else (if (showManualPlayOption) onPrimaryPlayLongClick else null),
                 )
             }
             MetaScreenSectionKey.OVERVIEW -> {

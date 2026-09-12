@@ -15,6 +15,7 @@ fun HomePosterCard(
     modifier: Modifier = Modifier,
     useLandscapeBackdropMode: Boolean = false,
     isWatched: Boolean = false,
+    isLocked: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -31,6 +32,7 @@ fun HomePosterCard(
         bottomLeftLogoUrl = if (isLandscapeMode) item.logo else null,
         bottomLeftText = if (isLandscapeMode && item.logo.isNullOrBlank() && !posterCardStyle.hideLabelsEnabled) item.name else null,
         isWatched = isWatched,
+        isLocked = isLocked,
         onClick = onClick,
         onLongClick = onLongClick,
     )

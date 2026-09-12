@@ -148,6 +148,8 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.auth.AuthScreen
 import com.nuvio.app.features.addons.AddAddonResult
 import com.nuvio.app.features.addons.AddonRepository
+import com.nuvio.app.features.updater.AppUpdateDialog
+import com.nuvio.app.features.updater.PlatformAppUpdater
 import com.nuvio.app.features.catalog.CatalogRepository
 import com.nuvio.app.features.catalog.CatalogScreen
 import com.nuvio.app.features.catalog.CatalogTarget
@@ -2232,7 +2234,7 @@ private fun MainAppContent(
                                         onLicensesAttributionsSettingsClick = {
                                             navController.navigate(LicensesAttributionsSettingsRoute(licensesSettingsTitle))
                                         },
-                                        onCheckForUpdatesClick = null,
+                                        onCheckForUpdatesClick = { PlatformAppUpdater.checkForUpdate(manual = true) },
                                         onTestUpdateBannerClick = null,
                                         onCollectionsSettingsClick = { navController.navigate(CollectionsRoute(collectionsTitle)) },
                                         onFolderClick = { collectionId, folderId ->
@@ -3395,7 +3397,7 @@ private fun MainAppContent(
                         onCollectionsClick = {
                             navController.navigate(CollectionsRoute(collectionsTitle))
                         },
-                        onCheckForUpdatesClick = null,
+                        onCheckForUpdatesClick = { PlatformAppUpdater.checkForUpdate(manual = true) },
                         onTestUpdateBannerClick = null,
                     )
                 }
@@ -3950,6 +3952,8 @@ private fun MainAppContent(
                     .align(Alignment.TopCenter)
                     .zIndex(20f),
             )
+
+            AppUpdateDialog()
 
             }
 }

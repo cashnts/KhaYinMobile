@@ -1,30 +1,16 @@
 package com.nuvio.app.core.ui
 
-import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.theme_khayin
-import nuvio.composeapp.generated.resources.theme_amber
-import nuvio.composeapp.generated.resources.theme_crimson
-import nuvio.composeapp.generated.resources.theme_emerald
-import nuvio.composeapp.generated.resources.theme_ocean
-import nuvio.composeapp.generated.resources.theme_rose
-import nuvio.composeapp.generated.resources.theme_violet
-import nuvio.composeapp.generated.resources.theme_white
-import nuvio.composeapp.generated.resources.theme_gold
-import nuvio.composeapp.generated.resources.theme_jade
-import nuvio.composeapp.generated.resources.theme_rose_gold
-import nuvio.composeapp.generated.resources.theme_arctic_blue
-import nuvio.composeapp.generated.resources.theme_graphite
-import nuvio.composeapp.generated.resources.theme_dark_indigo
+import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.StringResource
 
 enum class AppTheme {
     KHAYIN,
+    DARK_INDIGO,
     GOLD,
     JADE,
     ROSE_GOLD,
     ARCTIC_BLUE,
     GRAPHITE,
-    DARK_INDIGO,
     CRIMSON,
     OCEAN,
     VIOLET,
@@ -32,17 +18,25 @@ enum class AppTheme {
     AMBER,
     ROSE,
     WHITE,
+    CYBERPUNK,
+    SUNSET,
+    MIDNIGHT_PURPLE,
+    RUBY,
+    AQUAMARINE,
+    MINT,
+    CORAL,
+    TITANIUM,
 }
 
 val AppTheme.labelRes: StringResource
     get() = when (this) {
         AppTheme.KHAYIN -> Res.string.theme_khayin
+        AppTheme.DARK_INDIGO -> Res.string.theme_dark_indigo
         AppTheme.GOLD -> Res.string.theme_gold
         AppTheme.JADE -> Res.string.theme_jade
         AppTheme.ROSE_GOLD -> Res.string.theme_rose_gold
         AppTheme.ARCTIC_BLUE -> Res.string.theme_arctic_blue
         AppTheme.GRAPHITE -> Res.string.theme_graphite
-        AppTheme.DARK_INDIGO -> Res.string.theme_dark_indigo
         AppTheme.CRIMSON -> Res.string.theme_crimson
         AppTheme.OCEAN -> Res.string.theme_ocean
         AppTheme.VIOLET -> Res.string.theme_violet
@@ -50,4 +44,12 @@ val AppTheme.labelRes: StringResource
         AppTheme.AMBER -> Res.string.theme_amber
         AppTheme.ROSE -> Res.string.theme_rose
         AppTheme.WHITE -> Res.string.theme_white
+        AppTheme.CYBERPUNK -> Res.string.theme_cyberpunk
+        AppTheme.SUNSET -> Res.string.theme_sunset
+        AppTheme.MIDNIGHT_PURPLE -> Res.string.theme_midnight_purple
+        AppTheme.RUBY -> Res.string.theme_ruby
+        AppTheme.AQUAMARINE -> Res.string.theme_aquamarine
+        AppTheme.MINT -> Res.string.theme_mint
+        AppTheme.CORAL -> Res.string.theme_coral
+        AppTheme.TITANIUM -> Res.string.theme_titanium
     }

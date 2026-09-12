@@ -160,7 +160,14 @@ internal fun PlayerScreenRuntime.refreshTracks() {
         ) ?: args.contentLanguage,
     )
 
-    if (!preferredAudioSelectionApplied) {
+    val englishAudio = audioTracks.firstOrNull { isEnglishAudioTrack(it) }
+    if (englishAudio != null) {
+        if (selectedAudioIndex != englishAudio.index) {
+            playerController?.selectAudioTrack(englishAudio.index)
+            selectedAudioIndex = englishAudio.index
+        }
+        preferredAudioSelectionApplied = true
+    } else if (!preferredAudioSelectionApplied) {
         if (preferredAudioTargets.isEmpty()) {
             preferredAudioSelectionApplied = true
         } else if (audioTracks.isNotEmpty()) {

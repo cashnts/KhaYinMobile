@@ -26,10 +26,6 @@ actual object AddonStorage {
     private const val addonUrlsKey = "installed_manifest_urls"
     private const val addonEnabledStatesKey = "installed_manifest_enabled_states"
 
-    private const val DEFAULT_CINEMETA_URL = "https://v3-cinemeta.strem.io/manifest.json"
-    private const val DEFAULT_KHAYIN_URL = "https://stream.khayin.net/manifest.json"
-    private val DEFAULT_ADDONS = listOf(DEFAULT_CINEMETA_URL, DEFAULT_KHAYIN_URL)
-
     actual fun loadInstalledAddonUrls(profileId: Int): List<String> {
         val stored = NSUserDefaults.standardUserDefaults
             .stringForKey("${addonUrlsKey}_$profileId")
@@ -38,12 +34,12 @@ actual object AddonStorage {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .toList()
-        return (DEFAULT_ADDONS + stored).distinct()
+        return stored.distinct()
     }
 
     actual fun saveInstalledAddonUrls(profileId: Int, urls: List<String>) {
         NSUserDefaults.standardUserDefaults.setObject(
-            (DEFAULT_ADDONS + urls).distinct().joinToString(separator = "\n"),
+            urls.distinct().joinToString(separator = "\n"),
             forKey = "${addonUrlsKey}_$profileId",
         )
     }
@@ -56,16 +52,11 @@ actual object AddonStorage {
             .mapNotNull(::parseEnabledStateLine)
             .toMap()
             .toMutableMap()
-        loaded.put(DEFAULT_CINEMETA_URL, true)
-        loaded.putIfAbsent(DEFAULT_KHAYIN_URL, true)
         return loaded
     }
 
     actual fun saveAddonEnabledStates(profileId: Int, states: Map<String, Boolean>) {
-        val updated = states.toMutableMap().apply {
-            put(DEFAULT_CINEMETA_URL, true)
-        }
-        val payload = updated.entries.joinToString(separator = "\n") { (url, enabled) ->
+        val payload = states.entries.joinToString(separator = "\n") { (url, enabled) ->
             "$url\t$enabled"
         }
         NSUserDefaults.standardUserDefaults.setObject(

@@ -42,6 +42,14 @@ data class SystemServiceConfig(
     // 3. Over-The-Air Addon Management
     val presetAddons: List<String> = emptyList(),
     val disabledAddons: List<String> = emptyList(), // Instant remote blacklist for broken/malicious addons
+    val addonMetadata: Map<String, AddonMetadataOverride> = emptyMap(), // Admin-overridden names/descriptions per addon URL
+)
+
+/** Per-addon metadata overrides set by the admin and broadcast to all clients. */
+@Serializable
+data class AddonMetadataOverride(
+    val name: String? = null,
+    val description: String? = null,
 )
 
 private val DEFAULT_PH_KEY_PARTS = listOf("phx_", "JzxYddY8UjrVtn7hr43Z", "BoEiMykSAQkz2XfVqRKPmXoQsRLA")

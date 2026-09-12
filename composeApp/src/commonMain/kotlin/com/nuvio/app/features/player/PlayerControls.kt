@@ -106,6 +106,7 @@ internal fun PlayerControlsShell(
     onScrubFinished: (Long) -> Unit,
     horizontalSafePadding: androidx.compose.ui.unit.Dp,
     isPrerollActive: Boolean = false,
+    isLive: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -204,6 +205,7 @@ internal fun PlayerControlsShell(
                     onSourcesClick = onSourcesClick,
                     onEpisodesClick = onEpisodesClick,
                     isPrerollActive = isPrerollActive,
+                    isLive = isLive,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -546,6 +548,7 @@ private fun ProgressControls(
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
     isPrerollActive: Boolean = false,
+    isLive: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val durationMs = playbackSnapshot.durationMs.coerceAtLeast(1L)
@@ -555,26 +558,74 @@ private fun ProgressControls(
 
     Column(modifier = modifier) {
         if (!isPrerollActive) {
-            Slider(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(metrics.sliderTouchHeight)
-                    .graphicsLayer(scaleY = metrics.sliderScaleY),
-                value = displayedPositionMs.coerceIn(0L, durationMs).toFloat(),
-                onValueChange = { value -> onScrubChange(value.toLong()) },
-                onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, durationMs)) },
-                valueRange = 0f..durationMs.toFloat(),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .padding(top = 4.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TimePill(text = formatPlaybackTime(displayedPositionMs), fontSize = metrics.timeSize)
-                TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize)
+            if (isLive) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .padding(top = 6.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFFFF2A2A))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White),
+                            )
+                            Text(
+                                text = "LIVE",
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFFFF2A2A), Color(0xFFFF5A5A), Color(0xFFFF2A2A)),
+                                ),
+                            ),
+                    )
+                }
+            } else {
+                Slider(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(metrics.sliderTouchHeight)
+                        .graphicsLayer(scaleY = metrics.sliderScaleY),
+                    value = displayedPositionMs.coerceIn(0L, durationMs).toFloat(),
+                    onValueChange = { value -> onScrubChange(value.toLong()) },
+                    onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, durationMs)) },
+                    valueRange = 0f..durationMs.toFloat(),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .padding(top = 4.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TimePill(text = formatPlaybackTime(displayedPositionMs), fontSize = metrics.timeSize)
+                    TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize)
+                }
             }
         }
         Row(
@@ -602,11 +653,13 @@ private fun ProgressControls(
                         painter = aspectRatioPainter,
                         onClick = onResizeModeClick,
                     )
-                    PlayerActionPillButton(
-                        label = formatPlaybackSpeedLabel(playbackSnapshot.playbackSpeed),
-                        icon = Icons.Rounded.Speed,
-                        onClick = onSpeedClick,
-                    )
+                    if (!isLive) {
+                        PlayerActionPillButton(
+                            label = formatPlaybackSpeedLabel(playbackSnapshot.playbackSpeed),
+                            icon = Icons.Rounded.Speed,
+                            onClick = onSpeedClick,
+                        )
+                    }
                     PlayerActionPillButton(
                         label = stringResource(Res.string.compose_player_subs),
                         painter = subtitlesPainter,

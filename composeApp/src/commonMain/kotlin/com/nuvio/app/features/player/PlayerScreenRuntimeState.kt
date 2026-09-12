@@ -59,6 +59,18 @@ internal class PlayerScreenRuntime(
     val initialProgressFraction: Float? get() = args.initialProgressFraction
     val externalSubtitles: List<com.nuvio.app.features.streams.StreamSubtitle> get() = args.externalSubtitles
     val isSeries: Boolean get() = parentMetaType == "series"
+    val isLive: Boolean
+        get() = com.nuvio.app.features.details.LiveMediaCleaner.isLive(
+            type = contentType,
+            parentMetaType = parentMetaType,
+            streamType = streamType,
+            title = title,
+            streamTitle = activeStreamTitle.ifBlank { streamTitle },
+            description = pauseDescription,
+            pauseDescription = pauseDescription,
+            sourceUrl = activeSourceUrl ?: sourceUrl,
+            durationMs = playbackSnapshot.durationMs,
+        )
 
     lateinit var scope: CoroutineScope
     lateinit var hapticFeedback: HapticFeedback

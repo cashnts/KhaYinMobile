@@ -319,6 +319,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             isLocked = playerControlsLocked,
             showPlaybackControls = controlsVisible,
             isPrerollActive = isPrerollActive,
+            isLive = isLive,
             onLockToggle = {
                 if (playerControlsLocked) unlockPlayerControls() else lockPlayerControls()
             },

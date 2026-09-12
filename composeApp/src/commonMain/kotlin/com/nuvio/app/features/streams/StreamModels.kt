@@ -57,7 +57,10 @@ data class StreamItem(
         get() = preroll?.skippableAfter ?: behaviorHints.prerollSkippableAfter ?: 5
 
     val streamLabel: String
-        get() = name ?: runCatching { runBlocking { getString(Res.string.stream_default_name) } }.getOrDefault("Stream")
+        get() {
+            val raw = name ?: runCatching { runBlocking { getString(Res.string.stream_default_name) } }.getOrDefault("Stream")
+            return com.nuvio.app.features.details.LiveMediaCleaner.cleanStreamLabel(raw)
+        }
 
     val streamSubtitle: String?
         get() = description

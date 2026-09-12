@@ -45,6 +45,13 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         }
     }
 
+    LaunchedEffect(isLive) {
+        if (isLive && !com.nuvio.app.features.license.LicenseRepository.isPlusMember) {
+            errorMessage = "Upgrade to Plus to access sports streams."
+            shouldPlay = false
+        }
+    }
+
     LaunchedEffect(parentMetaType, parentMetaId) {
         playerMetaVideos = MetaDetailsRepository.peek(parentMetaType, parentMetaId)?.videos ?: emptyList()
         if (playerMetaVideos.isEmpty()) {
