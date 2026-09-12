@@ -1,6 +1,8 @@
 package com.nuvio.app.features.home
 
+import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.ManagedAddon
+import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.collection.Collection
 import com.nuvio.app.features.collection.CollectionRepository
 import kotlinx.coroutines.runBlocking
@@ -138,8 +140,14 @@ object HomeCatalogSettingsRepository {
         persist()
     }
 
-    fun syncCollections(collections: List<Collection>) {
+    fun syncCollections(
+        collections: List<Collection>,
+        addons: List<ManagedAddon> = AddonRepository.uiState.value.addons.enabledAddons(),
+    ) {
         ensureLoaded()
+        if (definitions.isEmpty()) {
+            definitions = buildHomeCatalogDefinitions(addons)
+        }
         collectionDefinitions = buildCollectionDefinitions(collections)
         normalizePreferences()
         enforcePinnedCollectionsAtTop()
@@ -236,6 +244,43 @@ object HomeCatalogSettingsRepository {
 
     fun moveDown(key: String) {
         move(key = key, direction = 1)
+    }
+
+    fun applyPresetCatalogs(
+        presetCatalogs: List<com.nuvio.app.features.license.PresetCatalogConfig>,
+        heroCarouselEnabled: Boolean? = null,
+        showCatalogType: Boolean? = null,
+        hideUnreleasedContent: Boolean? = null,
+    ) {
+        if (presetCatalogs.isEmpty() && heroCarouselEnabled == null && showCatalogType == null && hideUnreleasedContent == null) return
+        ensureLoaded()
+        if (heroCarouselEnabled != null) {
+            this.heroEnabled = heroCarouselEnabled
+        }
+        if (showCatalogType != null) {
+            this.showCatalogType = showCatalogType
+        }
+        if (hideUnreleasedContent != null) {
+            this.hideUnreleasedContent = hideUnreleasedContent
+        }
+
+        if (presetCatalogs.isNotEmpty()) {
+            presetCatalogs.forEach { preset ->
+                val current = preferences[preset.key]
+                preferences[preset.key] = StoredHomeCatalogPreference(
+                    key = preset.key,
+                    customTitle = preset.customTitle.ifBlank { current?.customTitle.orEmpty() },
+                    enabled = preset.enabled,
+                    heroSourceEnabled = preset.heroSourceEnabled,
+                    order = preset.order,
+                )
+            }
+            normalizePreferences()
+            enforcePinnedCollectionsAtTop()
+        }
+        publish()
+        persist()
+        HomeRepository.applyCurrentSettings()
     }
 
     fun moveByIndex(fromIndex: Int, toIndex: Int) {

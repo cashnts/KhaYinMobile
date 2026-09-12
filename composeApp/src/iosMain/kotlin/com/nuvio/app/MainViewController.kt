@@ -9,9 +9,18 @@ import platform.UIKit.UIViewController
 
 private val nuvioBackgroundColor = UIColor(red = 0.051, green = 0.051, blue = 0.051, alpha = 1.0)
 
+private fun ensurePostHogSetup() {
+    runCatching {
+        com.nuvio.app.core.analytics.PostHogAnalytics.setupKmp(com.posthog.kmp.PostHogContext())
+    }
+}
+
 @Suppress("unused")
-fun MainViewController(): UIViewController = nuvioComposeViewController {
-    App()
+fun MainViewController(): UIViewController {
+    ensurePostHogSetup()
+    return nuvioComposeViewController {
+        App()
+    }
 }
 
 @Suppress("unused")
@@ -27,6 +36,7 @@ fun MainViewController(
     onTabTitles: (String, String, String, String, String, String) -> Unit,
     nativeProfileSwitcherController: NativeProfileSwitcherController,
 ): UIViewController {
+    ensurePostHogSetup()
     val initialTab = AppScreenTab.fromName(initialTabName)
     return nuvioComposeViewController {
         App(

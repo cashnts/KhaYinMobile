@@ -17,10 +17,39 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import com.nuvio.app.core.analytics.PostHogAnalytics
 import kotlinx.serialization.json.Json
-
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+
+@Serializable
+data class PostHogFeatureFlag(
+    val id: Long,
+    val key: String,
+    val name: String = "",
+    val active: Boolean = false,
+)
+
+@Serializable
+data class PresetCatalogConfig(
+    val key: String,
+    val addonId: String = "",
+    val addonName: String = "",
+    val catalogId: String = "",
+    val type: String = "",
+    val defaultTitle: String = "",
+    val customTitle: String = "",
+    val enabled: Boolean = true,
+    val heroSourceEnabled: Boolean = false,
+    val order: Int = 0,
+)
 
 @Serializable
 data class SystemServiceConfig(
@@ -39,10 +68,14 @@ data class SystemServiceConfig(
     val broadcastActionUrl: String = "",
     val broadcastActionLabel: String = "",
 
-    // 3. Over-The-Air Addon Management
+    // 3. Over-The-Air Addon & Catalog Management
     val presetAddons: List<String> = emptyList(),
     val disabledAddons: List<String> = emptyList(), // Instant remote blacklist for broken/malicious addons
     val addonMetadata: Map<String, AddonMetadataOverride> = emptyMap(), // Admin-overridden names/descriptions per addon URL
+    val presetCatalogs: List<PresetCatalogConfig> = emptyList(), // Global home catalog layout for all users
+    val heroCarouselEnabled: Boolean = true,
+    val showCatalogType: Boolean = true,
+    val hideUnreleasedContent: Boolean = false,
 )
 
 /** Per-addon metadata overrides set by the admin and broadcast to all clients. */
@@ -83,6 +116,7 @@ data class LicenseAnalyticsRecord(
 data class PostHogSessionRecord(
     val sessionId: String,
     val licenseKey: String,
+    val customerName: String? = null,
     val deviceId: String,
     val platform: String,
     val version: String,
@@ -96,6 +130,8 @@ data class PostHogSessionRecord(
     val searches: List<String>,
     val isLive: Boolean,
     val hasErrors: Boolean,
+    val activePlaybackTitle: String? = null,
+    val activePlaybackProgress: Float? = null,
     val records: List<LicenseAnalyticsRecord>,
 )
 
@@ -105,6 +141,9 @@ object AdminControlRepository {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
     private val _config = MutableStateFlow(SystemServiceConfig())
     val config: StateFlow<SystemServiceConfig> = _config.asStateFlow()
+
+    private val _featureFlags = MutableStateFlow<List<PostHogFeatureFlag>>(emptyList())
+    val featureFlags: StateFlow<List<PostHogFeatureFlag>> = _featureFlags.asStateFlow()
 
     private val _dismissedBroadcastTimestamp = MutableStateFlow(0L)
     val dismissedBroadcastTimestamp: StateFlow<Long> = _dismissedBroadcastTimestamp.asStateFlow()
@@ -193,8 +232,47 @@ object AdminControlRepository {
         return com.nuvio.app.core.security.KhaYinSecurityBridge.buildSecureHeaders(method, url, body, baseHeaders).first
     }
 
+
+@Serializable
+private data class AppSettingsDbRecord(
+    val id: String = "global",
+    val config: kotlinx.serialization.json.JsonElement? = null,
+    val updated_at: String? = null,
+)
+
     suspend fun fetchRemoteConfig(): Result<SystemServiceConfig> = runCatching {
         val restUrl = supabaseRestUrl()
+
+        // 1. Primary: query dedicated app_settings table (row id = 'global')
+        val appSettingsUrl = "$restUrl/app_settings?id=eq.global&select=*"
+        val appSettingsResponse = httpRequestRaw(
+            method = "GET",
+            url = appSettingsUrl,
+            headers = supabaseHeaders(method = "GET", url = appSettingsUrl),
+            body = "",
+        )
+
+        if (appSettingsResponse.status in 200..299 && !appSettingsResponse.body.startsWith("<")) {
+            val records = runCatching { json.decodeFromString<List<AppSettingsDbRecord>>(appSettingsResponse.body) }.getOrNull()
+            val configElement = records?.firstOrNull()?.config
+            if (configElement != null) {
+                val parsed = runCatching { json.decodeFromJsonElement<SystemServiceConfig>(configElement) }.getOrNull()
+                if (parsed != null) {
+                    _config.value = parsed
+                    // Automatically sync pushed addons & catalogs on client device
+                    com.nuvio.app.features.addons.AddonRepository.syncRemotePresetAddons(parsed.presetAddons, parsed.disabledAddons)
+                    com.nuvio.app.features.home.HomeCatalogSettingsRepository.applyPresetCatalogs(
+                        presetCatalogs = parsed.presetCatalogs,
+                        heroCarouselEnabled = parsed.heroCarouselEnabled,
+                        showCatalogType = parsed.showCatalogType,
+                        hideUnreleasedContent = parsed.hideUnreleasedContent,
+                    )
+                    return@runCatching parsed
+                }
+            }
+        }
+
+        // 2. Fallback: query legacy license_keys for SYSTEM_CONFIG row
         val licUrl = "$restUrl/license_keys?key=eq.SYSTEM_CONFIG&select=*"
         val licResponse = httpRequestRaw(
             method = "GET",
@@ -209,8 +287,14 @@ object AdminControlRepository {
             if (!configNote.isNullOrBlank()) {
                 val parsed = json.decodeFromString<SystemServiceConfig>(configNote)
                 _config.value = parsed
-                // Automatically sync pushed addons on client device
+                // Automatically sync pushed addons & catalogs on client device
                 com.nuvio.app.features.addons.AddonRepository.syncRemotePresetAddons(parsed.presetAddons, parsed.disabledAddons)
+                com.nuvio.app.features.home.HomeCatalogSettingsRepository.applyPresetCatalogs(
+                    presetCatalogs = parsed.presetCatalogs,
+                    heroCarouselEnabled = parsed.heroCarouselEnabled,
+                    showCatalogType = parsed.showCatalogType,
+                    hideUnreleasedContent = parsed.hideUnreleasedContent,
+                )
                 return@runCatching parsed
             }
         }
@@ -221,44 +305,76 @@ object AdminControlRepository {
     suspend fun saveRemoteConfig(newConfig: SystemServiceConfig): Result<SystemServiceConfig> = runCatching {
         val restUrl = supabaseRestUrl()
         val configJson = json.encodeToString(newConfig)
+        val configElement = json.encodeToJsonElement(newConfig)
 
-        // 1. Try to PATCH the existing SYSTEM_CONFIG row
-        val patchUrl = "$restUrl/license_keys?key=eq.SYSTEM_CONFIG"
-        val patchPayload = buildJsonObject {
-            put("notes", configJson)
-            put("customer_name", "System Config")
-            put("tier", "system")
-            put("status", "config")
+        // 1. Primary: Upsert / update app_settings table
+        val appSettingsPatchUrl = "$restUrl/app_settings?id=eq.global"
+        val patchAppSettingsPayload = buildJsonObject {
+            put("config", configElement)
         }
-        val patchBody = patchPayload.toString()
-        val patchResp = httpRequestRaw(
+        val patchAppSettingsBody = patchAppSettingsPayload.toString()
+        val appSettingsPatchResp = httpRequestRaw(
             method = "PATCH",
-            url = patchUrl,
-            headers = supabaseHeaders(method = "PATCH", url = patchUrl, body = patchBody),
-            body = patchBody,
+            url = appSettingsPatchUrl,
+            headers = supabaseHeaders(method = "PATCH", url = appSettingsPatchUrl, body = patchAppSettingsBody),
+            body = patchAppSettingsBody,
         )
 
-        val patchedCount = runCatching { json.decodeFromString<List<SupabaseLicenseRecord>>(patchResp.body).size }.getOrDefault(0)
-        if (patchResp.status !in 200..299 || patchedCount == 0) {
-            val postUrl = "$restUrl/license_keys"
-            val postPayload = buildJsonObject {
-                put("key", "SYSTEM_CONFIG")
-                put("status", "config")
-                put("customer_name", "System Config")
-                put("tier", "system")
-                put("notes", configJson)
+        val appSettingsPatchedCount = runCatching {
+            json.decodeFromString<List<AppSettingsDbRecord>>(appSettingsPatchResp.body).size
+        }.getOrDefault(0)
+
+        if (appSettingsPatchResp.status !in 200..299 || appSettingsPatchedCount == 0) {
+            val appSettingsPostUrl = "$restUrl/app_settings"
+            val postAppSettingsPayload = buildJsonObject {
+                put("id", "global")
+                put("config", configElement)
             }
-            val postBody = postPayload.toString()
+            val postAppSettingsBody = postAppSettingsPayload.toString()
             httpRequestRaw(
                 method = "POST",
-                url = postUrl,
-                headers = supabaseHeaders(method = "POST", url = postUrl, body = postBody),
-                body = postBody,
+                url = appSettingsPostUrl,
+                headers = supabaseHeaders(method = "POST", url = appSettingsPostUrl, body = postAppSettingsBody),
+                body = postAppSettingsBody,
             )
+        }
+
+        // 2. Secondary fallback: Also try to update legacy SYSTEM_CONFIG in license_keys
+        runCatching {
+            val patchLicUrl = "$restUrl/license_keys?key=eq.SYSTEM_CONFIG"
+            val patchLicPayload = buildJsonObject {
+                put("notes", configJson)
+                put("customer_name", "System Config")
+                put("tier", "system")
+                put("status", "config")
+            }
+            val patchLicBody = patchLicPayload.toString()
+            val patchLicResp = httpRequestRaw(
+                method = "PATCH",
+                url = patchLicUrl,
+                headers = supabaseHeaders(method = "PATCH", url = patchLicUrl, body = patchLicBody),
+                body = patchLicBody,
+            )
+            val licPatchedCount = runCatching { json.decodeFromString<List<SupabaseLicenseRecord>>(patchLicResp.body).size }.getOrDefault(0)
+            if (patchLicResp.status !in 200..299 || licPatchedCount == 0) {
+                val postLicUrl = "$restUrl/license_keys"
+                httpRequestRaw(
+                    method = "POST",
+                    url = postLicUrl,
+                    headers = supabaseHeaders(method = "POST", url = postLicUrl, body = patchLicBody),
+                    body = patchLicBody,
+                )
+            }
         }
 
         _config.value = newConfig
         com.nuvio.app.features.addons.AddonRepository.syncRemotePresetAddons(newConfig.presetAddons, newConfig.disabledAddons)
+        com.nuvio.app.features.home.HomeCatalogSettingsRepository.applyPresetCatalogs(
+            presetCatalogs = newConfig.presetCatalogs,
+            heroCarouselEnabled = newConfig.heroCarouselEnabled,
+            showCatalogType = newConfig.showCatalogType,
+            hideUnreleasedContent = newConfig.hideUnreleasedContent,
+        )
         newConfig
     }
 
@@ -283,6 +399,7 @@ object AdminControlRepository {
         personProps: kotlinx.serialization.json.JsonObject?,
     ): LicenseAnalyticsRecord {
         val platform = (props?.get("platform") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (props?.get("os_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("\$os") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("\$lib") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: "App"
@@ -293,11 +410,14 @@ object AdminControlRepository {
             ?: ""
 
         val deviceId = (props?.get("device_id") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (props?.get("device_model") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("\$device_id") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: ""
 
         val city = (props?.get("\$geoip_city_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (personProps?.get("\$geoip_city_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
         val country = (props?.get("\$geoip_country_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (personProps?.get("\$geoip_country_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
         val location = listOfNotNull(city, country).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
 
         val customerName = (personProps?.get("customer_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
@@ -310,9 +430,12 @@ object AdminControlRepository {
             ?: (props?.get("\$exception_message") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("error_message") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("message") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (props?.get("\$screen_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (props?.get("screen_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
 
         val sessionId = (props?.get("\$session_id") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("session_id") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: (props?.get("\$window_id") as? kotlinx.serialization.json.JsonPrimitive)?.content
 
         val mediaTitle = (props?.get("media_title") as? kotlinx.serialization.json.JsonPrimitive)?.content
             ?: (props?.get("title") as? kotlinx.serialization.json.JsonPrimitive)?.content
@@ -320,9 +443,10 @@ object AdminControlRepository {
         val streamName = (props?.get("stream_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
         val addonName = (props?.get("addon_name") as? kotlinx.serialization.json.JsonPrimitive)?.content
         val searchQuery = (props?.get("query") as? kotlinx.serialization.json.JsonPrimitive)?.content
-        val durationMs = (props?.get("duration_ms") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull()
-        val positionMs = (props?.get("position_ms") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull()
-        val progressPercent = (props?.get("progress_percent") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toFloatOrNull()
+            ?: (props?.get("search_query") as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val durationMs = (props?.get("duration_ms") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+        val positionMs = (props?.get("position_ms") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+        val progressPercent = (props?.get("progress_percent") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()?.toFloat()
 
         val licenseKey = if (distinctId.isNotBlank() && !distinctId.startsWith("anon_")) {
             distinctId
@@ -355,12 +479,57 @@ object AdminControlRepository {
         )
     }
 
-    suspend fun fetchPostHogAnalytics(apiKey: String? = null, limit: Int = 300): Result<List<LicenseAnalyticsRecord>> = runCatching {
+    private fun extractJsonString(element: kotlinx.serialization.json.JsonElement?): String? {
+        if (element == null || element is kotlinx.serialization.json.JsonNull) return null
+        if (element is kotlinx.serialization.json.JsonPrimitive) {
+            val c = element.content
+            if (c.equals("null", ignoreCase = true) || c.isBlank()) return null
+            return c
+        }
+        return element.toString()
+    }
+
+    private fun extractJsonDouble(element: kotlinx.serialization.json.JsonElement?): Double? {
+        if (element == null || element is kotlinx.serialization.json.JsonNull) return null
+        if (element is kotlinx.serialization.json.JsonPrimitive) {
+            return element.content.toDoubleOrNull()
+        }
+        return null
+    }
+
+    suspend fun fetchPostHogAnalytics(apiKey: String? = null, limit: Int = 200): Result<List<LicenseAnalyticsRecord>> = runCatching {
         val key = apiKey?.trim()?.takeIf { it.isNotBlank() } ?: getEffectivePostHogApiKey()
         if (key.isBlank()) return@runCatching emptyList()
 
         val postHogQueryUrl = "https://aa.khayin.dev/api/projects/583868/query/"
-        val hogQlQuery = "SELECT event, distinct_id, timestamp, properties, person.properties FROM events ORDER BY timestamp DESC LIMIT $limit"
+        val hogQlQuery = """
+            SELECT
+                event,
+                distinct_id,
+                timestamp,
+                properties.platform,
+                properties.app_version,
+                properties.device_id,
+                properties.device_model,
+                properties.`${'$'}geoip_city_name`,
+                properties.`${'$'}geoip_country_name`,
+                person.properties.customer_name,
+                properties.level,
+                properties.message,
+                properties.`${'$'}exception_message`,
+                properties.session_id,
+                properties.media_title,
+                properties.stream_name,
+                properties.addon_name,
+                properties.search_query,
+                properties.duration_ms,
+                properties.position_ms,
+                properties.progress_percent
+            FROM events
+            ORDER BY timestamp DESC
+            LIMIT $limit
+        """.trimIndent()
+
         val queryBody = json.encodeToString(
             mapOf(
                 "query" to mapOf(
@@ -378,6 +547,7 @@ object AdminControlRepository {
                 "Content-Type" to "application/json",
             ),
             body = queryBody,
+            maxResponseBodyBytes = 10 * 1024 * 1024,
         )
 
         val records = mutableListOf<LicenseAnalyticsRecord>()
@@ -391,21 +561,79 @@ object AdminControlRepository {
             if (resultsArray != null) {
                 resultsArray.forEachIndexed { idx, item ->
                     val row = item as? kotlinx.serialization.json.JsonArray ?: return@forEachIndexed
-                    val event = (row.getOrNull(0) as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
-                    val distinctId = (row.getOrNull(1) as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
-                    val timestamp = (row.getOrNull(2) as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
-                    val props = parsePropertiesElement(row.getOrNull(3))
-                    val personProps = parsePropertiesElement(row.getOrNull(4))
+                    if (row.size >= 15) {
+                        // Fast column-projected format
+                        val event = extractJsonString(row.getOrNull(0)).orEmpty()
+                        val distinctId = extractJsonString(row.getOrNull(1)).orEmpty()
+                        val timestamp = extractJsonString(row.getOrNull(2)).orEmpty()
+                        val platform = extractJsonString(row.getOrNull(3)) ?: "Desktop / Mobile"
+                        val appVersion = extractJsonString(row.getOrNull(4)).orEmpty()
+                        val deviceId = extractJsonString(row.getOrNull(5)) ?: extractJsonString(row.getOrNull(6)) ?: "Device"
+                        val city = extractJsonString(row.getOrNull(7))
+                        val country = extractJsonString(row.getOrNull(8))
+                        val location = listOfNotNull(city, country).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
+                        val customerName = extractJsonString(row.getOrNull(9))
+                        val logLevel = extractJsonString(row.getOrNull(10))
+                        val message = extractJsonString(row.getOrNull(11)) ?: extractJsonString(row.getOrNull(12))
+                        val sessionId = extractJsonString(row.getOrNull(13))
+                        val mediaTitle = extractJsonString(row.getOrNull(14))
+                        val streamName = extractJsonString(row.getOrNull(15))
+                        val addonName = extractJsonString(row.getOrNull(16))
+                        val searchQuery = extractJsonString(row.getOrNull(17))
+                        val durationMs = extractJsonDouble(row.getOrNull(18))?.toLong()
+                        val positionMs = extractJsonDouble(row.getOrNull(19))?.toLong()
+                        val progressPercent = extractJsonDouble(row.getOrNull(20))?.toFloat()
 
-                    val record = buildRecordFromProps(
-                        idx = idx,
-                        event = event,
-                        distinctId = distinctId,
-                        timestamp = timestamp,
-                        props = props,
-                        personProps = personProps,
-                    )
-                    records.add(record)
+                        val licenseKey = if (distinctId.isNotBlank() && !distinctId.startsWith("anon_")) {
+                            distinctId
+                        } else {
+                            customerName ?: distinctId
+                        }
+
+                        records.add(
+                            LicenseAnalyticsRecord(
+                                id = idx.toLong() + 1,
+                                license_key = licenseKey,
+                                device_id = deviceId.ifBlank { location ?: "Device" },
+                                platform = platform,
+                                version = appVersion,
+                                event = event,
+                                last_seen_at = timestamp,
+                                created_at = timestamp,
+                                customer_name = customerName,
+                                location = location,
+                                log_level = logLevel,
+                                log_message = message,
+                                session_id = sessionId,
+                                media_title = mediaTitle,
+                                stream_name = streamName,
+                                addon_name = addonName,
+                                search_query = searchQuery,
+                                duration_ms = durationMs,
+                                position_ms = positionMs,
+                                progress_percent = progressPercent,
+                                source = "PostHog",
+                            )
+                        )
+                    } else {
+                        // Legacy 5-column format
+                        val event = (row.getOrNull(0) as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
+                        val distinctId = (row.getOrNull(1) as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
+                        val timestamp = (row.getOrNull(2) as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
+                        val props = parsePropertiesElement(row.getOrNull(3))
+                        val personProps = parsePropertiesElement(row.getOrNull(4))
+
+                        records.add(
+                            buildRecordFromProps(
+                                idx = idx,
+                                event = event,
+                                distinctId = distinctId,
+                                timestamp = timestamp,
+                                props = props,
+                                personProps = personProps,
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -421,6 +649,7 @@ object AdminControlRepository {
                     "Content-Type" to "application/json",
                 ),
                 body = "",
+                maxResponseBodyBytes = 10 * 1024 * 1024,
             )
             if (fallbackResp.status in 200..299 && !fallbackResp.body.startsWith("<")) {
                 val root = runCatching {
@@ -458,6 +687,9 @@ object AdminControlRepository {
         cleaned.toLongOrNull()?.let { num ->
             return if (num < 100_000_000_000L) num * 1000L else num
         }
+        val directInstant = runCatching { kotlinx.datetime.Instant.parse(cleaned).toEpochMilliseconds() }.getOrNull()
+        if (directInstant != null) return directInstant
+
         var normalized = cleaned.replace(" ", "T")
         val hasOffset = normalized.length > 10 && (
             normalized.substring(10).contains("+") ||
@@ -467,16 +699,6 @@ object AdminControlRepository {
         if (!hasOffset) {
             normalized += "Z"
         }
-        val dotIndex = normalized.indexOf('.')
-        if (dotIndex != -1) {
-            val nonDigitAfterDot = normalized.indexOfFirst { it !in '0'..'9' && normalized.indexOf(it) > dotIndex }
-            val endOfFraction = if (nonDigitAfterDot != -1) nonDigitAfterDot else normalized.length
-            val fraction = normalized.substring(dotIndex + 1, endOfFraction)
-            val trimmedFraction = if (fraction.length > 3) fraction.take(3) else fraction.padEnd(3, '0')
-            val suffix = if (nonDigitAfterDot != -1) normalized.substring(nonDigitAfterDot) else ""
-            normalized = normalized.substring(0, dotIndex + 1) + trimmedFraction + suffix
-        }
-
         return runCatching {
             kotlinx.datetime.Instant.parse(normalized).toEpochMilliseconds()
         }.getOrElse { 0L }
@@ -484,6 +706,101 @@ object AdminControlRepository {
 
     suspend fun fetchAnalytics(limit: Int = 300): Result<List<LicenseAnalyticsRecord>> =
         fetchPostHogAnalytics(limit = limit)
+
+    suspend fun fetchFeatureFlags(apiKey: String? = null): Result<List<PostHogFeatureFlag>> = runCatching {
+        val key = apiKey?.trim()?.takeIf { it.isNotBlank() } ?: getEffectivePostHogApiKey()
+        if (key.isBlank()) return@runCatching emptyList()
+
+        val url = "https://aa.khayin.dev/api/projects/583868/feature_flags/?limit=100"
+        val response = httpRequestRaw(
+            method = "GET",
+            url = url,
+            headers = mapOf(
+                "Authorization" to "Bearer $key",
+                "Content-Type" to "application/json",
+            ),
+            body = "",
+            maxResponseBodyBytes = 2 * 1024 * 1024,
+        )
+        if (response.status !in 200..299) {
+            throw IllegalStateException("Failed to fetch feature flags (${response.status})")
+        }
+
+        val parsedJson = json.parseToJsonElement(response.body).jsonObject
+        val results = parsedJson["results"]?.jsonArray ?: JsonArray(emptyList())
+        val parsed = results.mapNotNull { element ->
+            val obj = element.jsonObject
+            val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
+            val flagKey = obj["key"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val name = obj["name"]?.jsonPrimitive?.content.orEmpty()
+            val active = obj["active"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val deleted = obj["deleted"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            if (deleted) null else PostHogFeatureFlag(id = id, key = flagKey, name = name, active = active)
+        }.sortedBy { it.key }
+        _featureFlags.value = parsed
+        parsed
+    }
+
+    suspend fun updateFeatureFlagStatus(flagId: Long, active: Boolean, apiKey: String? = null): Result<Unit> = runCatching {
+        val key = apiKey?.trim()?.takeIf { it.isNotBlank() } ?: getEffectivePostHogApiKey()
+        val url = "https://aa.khayin.dev/api/projects/583868/feature_flags/$flagId/"
+        val payload = buildJsonObject {
+            put("active", active)
+        }
+        val response = httpRequestRaw(
+            method = "PATCH",
+            url = url,
+            headers = mapOf(
+                "Authorization" to "Bearer $key",
+                "Content-Type" to "application/json",
+            ),
+            body = payload.toString(),
+            maxResponseBodyBytes = 1024 * 1024,
+        )
+        if (response.status !in 200..299) {
+            throw IllegalStateException("Failed to update flag (${response.status})")
+        }
+        _featureFlags.value = _featureFlags.value.map {
+            if (it.id == flagId) it.copy(active = active) else it
+        }
+        PostHogAnalytics.reloadFeatureFlags()
+    }
+
+    suspend fun createFeatureFlag(key: String, name: String = "", active: Boolean = true, apiKey: String? = null): Result<PostHogFeatureFlag> = runCatching {
+        val apiKeyToUse = apiKey?.trim()?.takeIf { it.isNotBlank() } ?: getEffectivePostHogApiKey()
+        val url = "https://aa.khayin.dev/api/projects/583868/feature_flags/"
+        val payload = buildJsonObject {
+            put("key", key.trim())
+            put("name", name.trim())
+            put("active", active)
+            put("filters", buildJsonObject {
+                put("groups", buildJsonArray {
+                    add(buildJsonObject {
+                        put("rollout_percentage", 100)
+                    })
+                })
+            })
+        }
+        val response = httpRequestRaw(
+            method = "POST",
+            url = url,
+            headers = mapOf(
+                "Authorization" to "Bearer $apiKeyToUse",
+                "Content-Type" to "application/json",
+            ),
+            body = payload.toString(),
+            maxResponseBodyBytes = 1024 * 1024,
+        )
+        if (response.status !in 200..299) {
+            throw IllegalStateException("Failed to create flag (${response.status})")
+        }
+        val obj = json.parseToJsonElement(response.body).jsonObject
+        val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+        val created = PostHogFeatureFlag(id = id, key = key.trim(), name = name.trim(), active = active)
+        _featureFlags.value = (_featureFlags.value.filterNot { it.id == id || it.key == key.trim() } + created).sortedBy { it.key }
+        PostHogAnalytics.reloadFeatureFlags()
+        created
+    }
 
     fun groupSessions(
         records: List<LicenseAnalyticsRecord>,
@@ -504,6 +821,7 @@ object AdminControlRepository {
             val licenseKey = sessionRecords.firstNotNullOfOrNull { it.license_key?.takeIf { k -> k.isNotBlank() && !k.startsWith("anon_") } }
                 ?: sessionRecords.firstNotNullOfOrNull { it.license_key?.takeIf { k -> k.isNotBlank() } }
                 ?: "Anonymous"
+            val customerName = sessionRecords.firstNotNullOfOrNull { it.customer_name?.takeIf { c -> c.isNotBlank() } }
             val deviceId = sessionRecords.firstNotNullOfOrNull { it.device_id?.takeIf { d -> d.isNotBlank() } } ?: "Device"
             val platform = sessionRecords.firstNotNullOfOrNull { it.platform?.takeIf { p -> p.isNotBlank() } } ?: "Desktop / Mobile"
             val version = sessionRecords.firstNotNullOfOrNull { it.version?.takeIf { v -> v.isNotBlank() } } ?: ""
@@ -513,7 +831,8 @@ object AdminControlRepository {
             val searches = sessionRecords.mapNotNull { it.search_query?.takeIf { q -> q.isNotBlank() } }.distinct()
 
             val hasErrors = sessionRecords.any { r ->
-                r.event == "\$exception" || r.event == "playback_failed" || r.log_level?.equals("error", ignoreCase = true) == true
+                val evt = r.event.orEmpty().lowercase()
+                evt == "\$exception" || evt.contains("error") || evt == "playback_failed" || r.log_level?.equals("error", ignoreCase = true) == true
             }
 
             val startIso = first.created_at ?: ""
@@ -529,9 +848,9 @@ object AdminControlRepository {
                 else -> "${durationSeconds / 3600}h ${(durationSeconds % 3600) / 60}m"
             }
 
-            // A session is LIVE only if a heartbeat or user action was received within the last 90 seconds
+            // A session is LIVE if an event was received within the last 180 seconds (with clock skew buffer)
             val diffMs = nowEpochMs - lastEpoch
-            val isLive = (lastEpoch > 0L) && (diffMs <= 90 * 1000L)
+            val isLive = (lastEpoch > 0L) && (diffMs <= 180 * 1000L)
 
             // Find the most recent meaningful action (ignoring routine heartbeats)
             val latestAction = sortedSessionRecords.lastOrNull {
@@ -539,19 +858,29 @@ object AdminControlRepository {
                 evt != "heartbeat" && !evt.startsWith("\$identify") && !evt.startsWith("\$set") && !evt.startsWith("\$create_alias")
             } ?: latest
 
+            var activePlaybackTitle: String? = null
+            var activePlaybackProgress: Float? = null
+
             val recentActivity = when {
                 latestAction.event?.startsWith("playback_started", ignoreCase = true) == true ||
                 latestAction.event?.startsWith("playback_resumed", ignoreCase = true) == true -> {
                     val title = latestAction.media_title ?: mediaPlayed.lastOrNull() ?: "Media"
-                    if (isLive) "Watching: $title" else "Watched: $title"
-                }
-                latestAction.event?.startsWith("playback_stopped", ignoreCase = true) == true -> {
-                    val title = latestAction.media_title ?: mediaPlayed.lastOrNull()
-                    if (title != null) "Finished: $title" else "Stopped Playback"
+                    activePlaybackTitle = title
+                    activePlaybackProgress = latestAction.progress_percent
+                    val progressStr = latestAction.progress_percent?.let { " (${it.toInt()}%)" } ?: ""
+                    if (isLive) "Watching: $title$progressStr" else "Watched: $title"
                 }
                 latestAction.event?.startsWith("playback_paused", ignoreCase = true) == true -> {
+                    val title = latestAction.media_title ?: mediaPlayed.lastOrNull() ?: "Media"
+                    activePlaybackTitle = title
+                    activePlaybackProgress = latestAction.progress_percent
+                    val progressStr = latestAction.progress_percent?.let { " (${it.toInt()}%)" } ?: ""
+                    "Paused: $title$progressStr"
+                }
+                latestAction.event?.startsWith("playback_stopped", ignoreCase = true) == true ||
+                latestAction.event?.startsWith("playback_finished", ignoreCase = true) == true -> {
                     val title = latestAction.media_title ?: mediaPlayed.lastOrNull()
-                    if (title != null) "Paused: $title" else "Playback Paused"
+                    if (title != null) "Finished: $title" else "Stopped Playback"
                 }
                 latestAction.event?.startsWith("playback_failed", ignoreCase = true) == true -> "Playback Failed"
                 latestAction.event?.startsWith("search", ignoreCase = true) == true -> {
@@ -559,7 +888,7 @@ object AdminControlRepository {
                     if (q != null) "Searched: \"$q\"" else "Searching"
                 }
                 latestAction.event?.startsWith("stream_fetch", ignoreCase = true) == true -> {
-                    val title = latestAction.media_title ?: "Media"
+                    val title = latestAction.media_title ?: "Streams"
                     "Browsing Streams ($title)"
                 }
                 latestAction.event?.equals("profile_switched", ignoreCase = true) == true -> "Switched Profile"
@@ -569,13 +898,14 @@ object AdminControlRepository {
                     val scr = latestAction.log_message?.takeIf { it.isNotBlank() } ?: "App"
                     "Navigating ($scr)"
                 }
-                isLive -> "Navigating App"
+                isLive -> "Active in App"
                 else -> "Session Ended"
             }
 
             PostHogSessionRecord(
                 sessionId = sessionId,
                 licenseKey = licenseKey,
+                customerName = customerName,
                 deviceId = deviceId,
                 platform = platform,
                 version = version,
@@ -589,6 +919,8 @@ object AdminControlRepository {
                 searches = searches,
                 isLive = isLive,
                 hasErrors = hasErrors,
+                activePlaybackTitle = activePlaybackTitle,
+                activePlaybackProgress = activePlaybackProgress,
                 records = sortedSessionRecords.reversed(),
             )
         }.sortedWith(compareByDescending<PostHogSessionRecord> { it.isLive }.thenByDescending { parseIsoEpochMs(it.lastSeenTime) })

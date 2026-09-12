@@ -2004,7 +2004,7 @@ private fun ConfiguredMetaSections(
             genres = meta.genres,
             description = meta.description,
         )
-        val isSportsLocked = isSportsItem && !com.nuvio.app.features.license.LicenseRepository.isPlusMember
+        val isSportsLocked = isSportsItem && !com.nuvio.app.features.license.LicenseRepository.canAccessSports
         var showSportsLockedDialog by remember { mutableStateOf(false) }
 
         if (showSportsLockedDialog) {

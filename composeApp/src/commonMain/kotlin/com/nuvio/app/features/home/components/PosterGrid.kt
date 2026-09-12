@@ -120,7 +120,7 @@ private fun PosterGridTile(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        val itemLocked = !com.nuvio.app.features.license.LicenseRepository.isPlusMember && com.nuvio.app.features.details.LiveMediaCleaner.isSportsItem(type = item.type, title = item.name, genres = item.genres, description = item.description)
+        val itemLocked = !com.nuvio.app.features.license.LicenseRepository.canAccessSports && com.nuvio.app.features.details.LiveMediaCleaner.isSportsItem(type = item.type, title = item.name, genres = item.genres, description = item.description)
         Box(
             modifier = Modifier
                 .fillMaxWidth()

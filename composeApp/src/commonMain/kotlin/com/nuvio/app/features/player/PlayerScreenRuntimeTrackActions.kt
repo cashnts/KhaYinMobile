@@ -27,9 +27,10 @@ internal val PlayerScreenRuntime.selectedAddonSubtitle: AddonSubtitle?
 internal fun PlayerScreenRuntime.updateTrackPreference(
     update: (PersistedPlayerTrackPreference) -> PersistedPlayerTrackPreference,
 ) {
-    if (parentMetaId.isBlank()) return
-    val current = PlayerTrackPreferenceStorage.load(parentMetaId) ?: PersistedPlayerTrackPreference()
-    PlayerTrackPreferenceStorage.save(parentMetaId, update(current))
+    val metaId = parentMetaId.ifBlank { activeVideoId.orEmpty() }
+    if (metaId.isBlank()) return
+    val current = PlayerTrackPreferenceStorage.load(metaId) ?: PersistedPlayerTrackPreference()
+    PlayerTrackPreferenceStorage.save(metaId, update(current))
 }
 
 internal fun PlayerScreenRuntime.persistAudioPreference(track: AudioTrack?) {
@@ -78,7 +79,8 @@ internal fun PlayerScreenRuntime.persistAddonSubtitlePreference(subtitle: AddonS
 
 internal fun PlayerScreenRuntime.restorePersistedTrackPreferenceIfNeeded() {
     if (trackPreferenceRestoreApplied) return
-    val preference = PlayerTrackPreferenceStorage.load(parentMetaId)
+    val metaId = parentMetaId.ifBlank { activeVideoId.orEmpty() }
+    val preference = if (metaId.isNotBlank()) PlayerTrackPreferenceStorage.load(metaId) else null
     if (preference == null) {
         trackPreferenceRestoreApplied = true
         return
@@ -216,31 +218,65 @@ internal fun PlayerScreenRuntime.refreshTracks() {
         if (selectionPlan.targets.isEmpty()) {
             disableAutomaticSubtitleSelection()
             preferredSubtitleSelectionApplied = true
-        } else if (subtitleTracks.isNotEmpty()) {
-            val preferredSubtitleIndex = findPreferredSubtitleTrackIndex(
-                tracks = subtitleTracks,
-                targets = selectionPlan.targets,
-                mode = selectionPlan.mode,
-            )
-            if (preferredSubtitleIndex >= 0 && preferredSubtitleIndex != selectedSubtitleIndex) {
-                playerController?.selectSubtitleTrack(preferredSubtitleIndex)
-                selectedSubtitleIndex = preferredSubtitleIndex
-                selectedAddonSubtitleId = null
-                useCustomSubtitles = false
-            } else if (preferredSubtitleIndex < 0) {
+        } else {
+            val preferredSubtitleIndex = if (subtitleTracks.isNotEmpty()) {
+                findPreferredSubtitleTrackIndex(
+                    tracks = subtitleTracks,
+                    targets = selectionPlan.targets,
+                    mode = selectionPlan.mode,
+                )
+            } else {
+                -1
+            }
+
+            if (preferredSubtitleIndex >= 0) {
+                if (preferredSubtitleIndex != selectedSubtitleIndex) {
+                    playerController?.selectSubtitleTrack(preferredSubtitleIndex)
+                    selectedSubtitleIndex = preferredSubtitleIndex
+                    selectedAddonSubtitleId = null
+                    useCustomSubtitles = false
+                }
+                preferredSubtitleSelectionApplied = true
+            } else {
+                // If embedded tracks do not match the preferred language, mute default unwanted embedded subtitle (e.g. English)
                 val activeSubtitleTrack = subtitleTracks.firstOrNull { track ->
                     track.index == selectedSubtitleIndex
                 } ?: subtitleTracks.firstOrNull { it.isSelected }
-                if (
-                    selectionPlan.mode == SubtitleAutoSelectionMode.FORCED_ONLY ||
-                    activeSubtitleTrack?.isForced == true
-                ) {
-                    disableAutomaticSubtitleSelection()
+                if (activeSubtitleTrack != null && selectedSubtitleIndex >= 0) {
+                    playerController?.selectSubtitleTrack(-1)
+                    selectedSubtitleIndex = -1
+                }
+
+                // Check if an addon subtitle already matches the preferred targets
+                if (tryAutoSelectAddonSubtitle(selectionPlan.targets)) {
+                    preferredSubtitleSelectionApplied = true
                 }
             }
-            preferredSubtitleSelectionApplied = true
         }
     }
+}
+
+internal fun PlayerScreenRuntime.tryAutoSelectAddonSubtitle(targets: List<String>): Boolean {
+    if (targets.isEmpty()) return false
+    val available = visibleAddonSubtitles.ifEmpty { addonSubtitles }
+    val candidates = available.filter { sub ->
+        targets.any { target ->
+            languageMatchesPreference(sub.language, target)
+        }
+    }
+    if (candidates.isEmpty()) return false
+
+    // Prioritize JIT-capable / KhaYin TV Hub subtitle if available
+    val selected = candidates.firstOrNull { sub ->
+        com.nuvio.app.features.subtitles.jit.SubtitleJitManager.isJitSubtitle(sub.url, sub.addonName)
+    } ?: candidates.first()
+
+    selectedAddonSubtitleId = selected.id
+    selectedSubtitleIndex = -1
+    useCustomSubtitles = true
+    persistAddonSubtitlePreference(selected)
+    playerController?.setSubtitleUri(selected.url)
+    return true
 }
 
 private fun PlayerScreenRuntime.disableAutomaticSubtitleSelection() {
