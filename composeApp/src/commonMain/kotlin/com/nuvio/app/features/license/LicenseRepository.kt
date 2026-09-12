@@ -73,6 +73,7 @@ object LicenseRepository {
 
     private var initialized = false
     private var verifyJob: Job? = null
+    private val analyticsGate = LicenseAnalyticsGate()
 
     @OptIn(ExperimentalUuidApi::class)
     fun getOrCreateDeviceId(): String {
@@ -188,6 +189,59 @@ object LicenseRepository {
             "Prefer" to "return=representation",
         )
         return com.nuvio.app.core.security.KhaYinSecurityBridge.buildSecureHeaders(method, url, body, baseHeaders).first
+    }
+
+    /**
+     * Posts a telemetry event to the `license_analytics` endpoint through the analytics gate.
+     *
+     * A permanent rejection (HTTP 4xx) is logged once with the response body (so the server-side
+     * cause is diagnosable) and pauses further posts for this license and event, so the client does
+     * not repeat a failing request on every 15-second heartbeat. A transient failure is retried on
+     * the next heartbeat.
+     */
+    private suspend fun postLicenseAnalytics(
+        licenseKey: String,
+        event: String,
+        deviceName: String,
+        platform: String,
+        appVersion: String,
+    ) {
+        if (!analyticsGate.shouldPost(licenseKey, event)) return
+
+        val nowMs = com.nuvio.app.features.watchprogress.WatchProgressClock.nowEpochMs().toString()
+        val nonce = com.nuvio.app.core.security.KhaYinSecurityBridge.generateNonce()
+        val timestamp = com.nuvio.app.core.security.KhaYinSecurityBridge.generateTimestamp()
+        val analyticsUrl = "${supabaseRestUrl()}/license_analytics"
+        val payload = json.encodeToString(mapOf(
+            "license_key" to licenseKey,
+            "device_id" to deviceName,
+            "platform" to platform,
+            "version" to appVersion,
+            "event" to event,
+            "nonce" to nonce,
+            "timestamp" to timestamp.toString(),
+            "last_seen_at" to nowMs,
+        ))
+
+        val response = runCatching {
+            httpRequestRaw(
+                method = "POST",
+                url = analyticsUrl,
+                headers = supabaseHeaders(method = "POST", url = analyticsUrl, body = payload),
+                body = payload,
+            )
+        }.getOrElse { e ->
+            log.w(e) { "License analytics $event request could not be sent" }
+            return
+        }
+
+        when (analyticsGate.onResult(licenseKey, event, response.status)) {
+            LicenseAnalyticsGate.Outcome.ACCEPTED -> Unit
+            LicenseAnalyticsGate.Outcome.REJECTED_PERMANENT ->
+                log.w { "License analytics $event rejected with HTTP ${response.status}; pausing posts for this license until it changes. Response body: ${response.body.trim().take(500)}" }
+            LicenseAnalyticsGate.Outcome.RETRYABLE ->
+                log.w { "License analytics $event failed with HTTP ${response.status}; will retry on the next heartbeat" }
+        }
     }
 
     private fun checkResponseOrThrow(response: RawHttpResponse, actionName: String) {
@@ -374,28 +428,8 @@ object LicenseRepository {
             val appVer = com.nuvio.app.core.build.AppVersionConfig.VERSION_NAME
             val devName = deviceMeta?.deviceName?.ifBlank { null } ?: getOrCreateDeviceId()
             val platformDesc = deviceMeta?.platform?.ifBlank { null } ?: "Mobile"
-            val nowMs = com.nuvio.app.features.watchprogress.WatchProgressClock.nowEpochMs().toString()
-            val actNonce = com.nuvio.app.core.security.KhaYinSecurityBridge.generateNonce()
-            val actTimestamp = com.nuvio.app.core.security.KhaYinSecurityBridge.generateTimestamp()
-            runCatching {
-                val analyticsUrl = "$restUrl/license_analytics"
-                val payload = json.encodeToString(mapOf(
-                    "license_key" to info.key,
-                    "device_id" to devName,
-                    "platform" to platformDesc,
-                    "version" to appVer,
-                    "event" to "activation",
-                    "nonce" to actNonce,
-                    "timestamp" to actTimestamp.toString(),
-                    "last_seen_at" to nowMs,
-                ))
-                httpRequestRaw(
-                    method = "POST",
-                    url = analyticsUrl,
-                    headers = supabaseHeaders(method = "POST", url = analyticsUrl, body = payload),
-                    body = payload,
-                )
-            }
+            analyticsGate.reset()
+            postLicenseAnalytics(info.key, "activation", devName, platformDesc, appVer)
 
             startHeartbeat()
 
@@ -468,28 +502,7 @@ object LicenseRepository {
             val appVer = com.nuvio.app.core.build.AppVersionConfig.VERSION_NAME
             val devName = deviceMeta?.deviceName?.ifBlank { null } ?: getOrCreateDeviceId()
             val platformDesc = deviceMeta?.platform?.ifBlank { null } ?: "Mobile"
-            val nowMs = com.nuvio.app.features.watchprogress.WatchProgressClock.nowEpochMs().toString()
-            val hbNonce = com.nuvio.app.core.security.KhaYinSecurityBridge.generateNonce()
-            val hbTimestamp = com.nuvio.app.core.security.KhaYinSecurityBridge.generateTimestamp()
-            runCatching {
-                val analyticsUrl = "$restUrl/license_analytics"
-                val payload = json.encodeToString(mapOf(
-                    "license_key" to currentInfo.key,
-                    "device_id" to devName,
-                    "platform" to platformDesc,
-                    "version" to appVer,
-                    "event" to "heartbeat",
-                    "nonce" to hbNonce,
-                    "timestamp" to hbTimestamp.toString(),
-                    "last_seen_at" to nowMs,
-                ))
-                httpRequestRaw(
-                    method = "POST",
-                    url = analyticsUrl,
-                    headers = supabaseHeaders(method = "POST", url = analyticsUrl, body = payload),
-                    body = payload,
-                )
-            }
+            postLicenseAnalytics(currentInfo.key, "heartbeat", devName, platformDesc, appVer)
 
             // PostHog Live Telemetry Heartbeat
             runCatching {
