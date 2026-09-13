@@ -53,7 +53,6 @@ object AddonRepository {
     val uiState: StateFlow<AddonsUiState> = _uiState.asStateFlow()
 
     const val DEFAULT_CINEMETA_ADDON_URL = "https://v3-cinemeta.strem.io/manifest.json"
-    const val DEFAULT_NUVIO_CATALOG_ADDON_URL = "https://catalog.nuvio.tv/manifest.json"
     const val DEFAULT_KHAYIN_STREAM_ADDON_URL = "https://stream.khayin.net/manifest.json"
     const val DEFAULT_OPENSUBTITLES_ADDON_URL = "https://opensubtitles-v3.strem.io/manifest.json"
     const val DEFAULT_SPORTS_ADDON_URL = "https://premium.highfly.dev/fd47b1a7-5d08-4e24-ae97-9e9fe91d6321/eyJpbmNsdWRlU3BvcnRzIjpbImZvb3RiYWxsIiwiYmFza2V0YmFsbCIsIm1vdG9yLXNwb3J0cyJdLCJoaWRlVGl0bGVzIjp0cnVlLCJoaWRlRGVzY3JpcHRpb25zIjp0cnVlLCJ0aW1lem9uZSI6Ik1NVCIsInNvcnRTdHJlYW1zIjoicXVhbGl0eS1oaWdoIiwibmFtZVRwbCI6IntzdHJlYW0uY2hhbm5lbE5hbWV9IHwge3N0cmVhbS5jYXRlZ29yeX0ifQ/manifest.json"
@@ -61,7 +60,6 @@ object AddonRepository {
     /** Locked addons that cannot be removed or disabled by the user. */
     val LOCKED_ADDON_URLS = setOf(
         DEFAULT_CINEMETA_ADDON_URL,
-        DEFAULT_NUVIO_CATALOG_ADDON_URL,
         DEFAULT_KHAYIN_STREAM_ADDON_URL,
         DEFAULT_OPENSUBTITLES_ADDON_URL,
         DEFAULT_SPORTS_ADDON_URL,
@@ -70,7 +68,6 @@ object AddonRepository {
     /** For UI: permanent built-in addons. */
     val DEFAULT_BUILTIN_ADDONS = listOf(
         DEFAULT_CINEMETA_ADDON_URL,
-        DEFAULT_NUVIO_CATALOG_ADDON_URL,
         DEFAULT_KHAYIN_STREAM_ADDON_URL,
         DEFAULT_OPENSUBTITLES_ADDON_URL,
         DEFAULT_SPORTS_ADDON_URL,
@@ -163,7 +160,6 @@ object AddonRepository {
                         DEFAULT_OPENSUBTITLES_ADDON_URL -> "KhaYin Subtitle"
                         DEFAULT_KHAYIN_STREAM_ADDON_URL -> "KhaYin Streams"
                         DEFAULT_CINEMETA_ADDON_URL -> "Cinemeta"
-                        DEFAULT_NUVIO_CATALOG_ADDON_URL -> "Nuvio Catalogs"
                         DEFAULT_SPORTS_ADDON_URL -> "Sports"
                         else -> ""
                     },
@@ -304,6 +300,17 @@ object AddonRepository {
             state.addons.isEmpty() ||
                 state.addons.any { it.manifest != null } ||
                 state.addons.none { it.isRefreshing }
+        }
+    }
+
+    suspend fun inspectRemoteManifest(rawUrl: String): Result<AddonManifest> = runCatching {
+        val manifestUrl = normalizeManifestUrl(rawUrl)
+        withContext(Dispatchers.Default) {
+            val payload = fetchAddonResponseText(manifestUrl)
+            AddonManifestParser.parse(
+                manifestUrl = manifestUrl,
+                payload = payload,
+            )
         }
     }
 
@@ -641,7 +648,7 @@ private fun ensureManifestSuffix(url: String): String {
     return if (query.isEmpty()) withSuffix else "$withSuffix?$query"
 }
 
-private fun normalizeManifestUrl(rawUrl: String): String {
+fun normalizeManifestUrl(rawUrl: String): String {
     val trimmed = rawUrl.trim()
     require(trimmed.isNotEmpty()) { runBlocking { getString(Res.string.addons_error_enter_url) } }
 
